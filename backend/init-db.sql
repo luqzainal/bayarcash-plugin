@@ -15,16 +15,14 @@ CREATE TABLE IF NOT EXISTS ghl_integrations (
   user_id VARCHAR(100),
   
   -- BayarCash Live Credentials
-  bayarcash_live_pat VARCHAR(255),
-  bayarcash_live_secret VARCHAR(255),
+  bayarcash_pat_live VARCHAR(500),
+  bayarcash_api_key_live VARCHAR(255),
+  bayarcash_portal_key_live VARCHAR(255),
   
   -- BayarCash Test Credentials
-  bayarcash_test_pat VARCHAR(255),
-  bayarcash_test_secret VARCHAR(255),
-  
-  -- Payment Provider Configuration
-  live_provider_id VARCHAR(100),
-  test_provider_id VARCHAR(100),
+  bayarcash_pat_test VARCHAR(500),
+  bayarcash_api_key_test VARCHAR(255),
+  bayarcash_portal_key_test VARCHAR(255),
   
   -- Metadata
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

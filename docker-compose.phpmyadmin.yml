@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  phpmyadmin:
+    image: phpmyadmin:latest
+    restart: unless-stopped
+    ports:
+      - "8082:80"
+    environment:
+      PMA_HOST: bayarcash-plugin-mysql-0vtxbm
+      PMA_PORT: 3306
+      PMA_USER: mysql
+      PMA_PASSWORD: Luqm@n1234
+      UPLOAD_LIMIT: 300M
+    networks:
+      - dokploy-network
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+
+networks:
+  dokploy-network:
+    external: true

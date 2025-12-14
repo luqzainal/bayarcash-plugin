@@ -45,11 +45,11 @@ const Settings = () => {
         try {
             const response = await axios.get(`/api/settings/${locationId}`);
             setFormData({
+                bayarcash_pat_live: response.data.bayarcash_pat_live || '',
                 bayarcash_api_key_live: response.data.bayarcash_api_key_live || '',
-                bayarcash_secret_key_live: response.data.bayarcash_secret_key_live || '',
                 bayarcash_portal_key_live: response.data.bayarcash_portal_key_live || '',
+                bayarcash_pat_test: response.data.bayarcash_pat_test || '',
                 bayarcash_api_key_test: response.data.bayarcash_api_key_test || '',
-                bayarcash_secret_key_test: response.data.bayarcash_secret_key_test || '',
                 bayarcash_portal_key_test: response.data.bayarcash_portal_key_test || ''
             });
         } catch (err) {
