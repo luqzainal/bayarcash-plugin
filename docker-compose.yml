@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  # MySQL 8.0 Database
+  mysql:
+    image: mysql:8.0
+    container_name: ghl_bayarcash_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ''
+      MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+      MYSQL_DATABASE: ghl_bayarcash
+    ports:
+      - "3306:3306"
+    volumes:
+      # Persistent data storage
+      - mysql_data:/var/lib/mysql
+      # Database initialization script
+      - ./backend/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - ghl_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+      interval: 10s
+
+  # phpMyAdmin for Database Management
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: ghl_bayarcash_phpmyadmin
+    restart: unless-stopped
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      PMA_ARBITRARY: 1
+    ports:
+      - "8080:80"
+    networks:
+      - ghl_network
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+# Persistent volumes
+volumes:
+  mysql_data:
+    driver: local
+
+# Network for service communication
+networks:
+  ghl_network:
+    driver: bridge

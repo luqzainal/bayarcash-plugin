@@ -40,4 +40,3 @@ backend/bayarcash_query_endpoint.js
 
 # Docker
 .dockerignore
-docker-compose.yml
