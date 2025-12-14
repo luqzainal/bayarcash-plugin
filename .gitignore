@@ -39,4 +39,4 @@ backend/reregister-provider.js
 backend/bayarcash_query_endpoint.js
 
 # Docker
-.dockerignore
+# (docker-compose.yml and .dockerignore are included)
