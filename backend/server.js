@@ -771,17 +771,40 @@ app.post('/api/bayarcash-query', async (req, res) => {
 });
 
 // ============================================
-// SERVE FRONTEND (for GHL iframe compatibility)
+// HEALTH CHECK ENDPOINTS
 // ============================================
 
-// Serve static files from React build
-app.use(express.static(path.join(__dirname, '../frontend/dist')));
-
-// Handle React routing - send all non-API requests to index.html
-// This must be AFTER all API routes
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+// Root health check
+app.get('/', (req, res) => {
+    res.json({
+        status: 'ok',
+        message: 'BayarCash Integration Server',
+        version: '1.0.0',
+        endpoints: {
+            oauth: '/oauth/callback',
+            settings: '/api/settings/:location_id',
+            banks: '/api/banks',
+            payment: '/api/process-payment',
+            query: '/api/bayarcash-query'
+        }
+    });
 });
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// ============================================
+// SERVE FRONTEND (DISABLED IN PRODUCTION)
+// ============================================
+// Frontend is deployed separately in production
+// Uncomment below for local development only
+
+// app.use(express.static(path.join(__dirname, '../frontend/dist')));
+// app.get('*', (req, res) => {
+//     res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+// });
 
 // Start server
 app.listen(PORT, () => {
