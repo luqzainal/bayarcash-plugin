@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Build outputs
+dist/
+build/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation files (exclude all .md except README.md)
+*.md
+!README.md
+
+# Additional JS scripts (utility/migration scripts)
+backend/migrate_db.js
+backend/check_db.js
+backend/register-both-providers.js
+backend/reregister-provider.js
+backend/bayarcash_query_endpoint.js
+
+# Docker
+.dockerignore
+docker-compose.yml

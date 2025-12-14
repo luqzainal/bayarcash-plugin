@@ -1,0 +1,39 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    body {
+        @apply bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 text-slate-900 antialiased;
+        font-family: 'Inter', sans-serif;
+        min-height: 100vh;
+    }
+}
+
+@layer components {
+    .btn-primary {
+        @apply px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 active:scale-95;
+    }
+
+    .btn-secondary {
+        @apply px-6 py-3 bg-white text-slate-700 font-semibold rounded-lg shadow-md hover:shadow-lg border border-slate-200 transform hover:-translate-y-0.5 transition-all duration-200 active:scale-95;
+    }
+
+    .card {
+        @apply bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-8;
+    }
+
+    .input-field {
+        @apply w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white/50 backdrop-blur-sm;
+    }
+
+    .alert-success {
+        @apply bg-gradient-to-r from-emerald-50 to-green-50 border-l-4 border-emerald-500 text-emerald-800 p-4 rounded-lg shadow-md animate-slide-up;
+    }
+
+    .alert-error {
+        @apply bg-gradient-to-r from-red-50 to-rose-50 border-l-4 border-red-500 text-red-800 p-4 rounded-lg shadow-md animate-slide-up;
+    }
+}
