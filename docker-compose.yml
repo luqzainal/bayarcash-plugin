@@ -1,34 +1,97 @@
 version: '3.8'
 
 services:
-  # MySQL 8.0 Database
+  # MySQL Database
   mysql:
     image: mysql:8.0
-    container_name: ghl_bayarcash_mysql
+    container_name: bayarcash_mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ''
-      MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-}
       MYSQL_DATABASE: ghl_bayarcash
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./backend/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     ports:
       - "3306:3306"
-    volumes:
-      # Persistent data storage
-      - mysql_data:/var/lib/mysql
-      # Database initialization script
-      - ./backend/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
-    networks:
-      - ghl_network
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       timeout: 20s
       retries: 10
-      interval: 10s
+    networks:
+      - bayarcash_network
 
-  # phpMyAdmin for Database Management
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bayarcash_backend
+    restart: unless-stopped
+    environment:
+      # GHL OAuth Credentials
+      CLIENT_ID: ${CLIENT_ID}
+      CLIENT_SECRET: ${CLIENT_SECRET}
+      REDIRECT_URI: ${REDIRECT_URI:-https://bayarcash.kodekreatif.my/oauth/callback}
+
+      # Frontend URL
+      FRONTEND_URL: ${FRONTEND_URL:-https://bayarcash.kodekreatif.my}
+
+      # Backend URL
+      BACKEND_URL: ${BACKEND_URL:-https://bayarcash.kodekreatif.my}
+
+      # Server Configuration
+      PORT: 3000
+      NODE_ENV: production
+
+      # MySQL Database Configuration
+      DB_HOST: mysql
+      DB_USER: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-}
+      DB_NAME: ghl_bayarcash
+
+      # GHL OAuth Endpoint
+      GHL_TOKEN_URL: https://services.leadconnectorhq.com/oauth/token
+    ports:
+      - "3000:3000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - bayarcash_network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend (React + Nginx)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-https://bayarcash.kodekreatif.my}
+    container_name: bayarcash_frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - bayarcash_network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # phpMyAdmin (optional - untuk development/debugging)
   phpmyadmin:
     image: phpmyadmin:latest
-    container_name: ghl_bayarcash_phpmyadmin
+    container_name: bayarcash_phpmyadmin
     restart: unless-stopped
     environment:
       PMA_HOST: mysql
@@ -36,18 +99,18 @@ services:
       PMA_ARBITRARY: 1
     ports:
       - "8080:80"
-    networks:
-      - ghl_network
     depends_on:
       mysql:
         condition: service_healthy
+    networks:
+      - bayarcash_network
+    profiles:
+      - dev
 
-# Persistent volumes
+networks:
+  bayarcash_network:
+    driver: bridge
+
 volumes:
   mysql_data:
     driver: local
-
-# Network for service communication
-networks:
-  ghl_network:
-    driver: bridge
