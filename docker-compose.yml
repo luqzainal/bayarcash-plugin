@@ -54,7 +54,7 @@ services:
       # GHL OAuth Endpoint
       GHL_TOKEN_URL: https://services.leadconnectorhq.com/oauth/token
     ports:
-      - "3000"
+      - "3000:3000"
     depends_on:
       mysql:
         condition: service_healthy
@@ -77,7 +77,7 @@ services:
     container_name: bayarcash_frontend
     restart: unless-stopped
     ports:
-      - "80"
+      - "80:80"
     depends_on:
       - backend
     networks:
