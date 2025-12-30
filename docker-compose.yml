@@ -99,8 +99,9 @@ services:
       PMA_HOST: mysql
       PMA_PORT: 3306
       PMA_ARBITRARY: 1
-    ports:
-      - "8080:80"
+    # No external port binding - Dokploy Traefik will handle routing
+    expose:
+      - "80"
     depends_on:
       mysql:
         condition: service_healthy
