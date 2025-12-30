@@ -53,8 +53,9 @@ services:
 
       # GHL OAuth Endpoint
       GHL_TOKEN_URL: https://services.leadconnectorhq.com/oauth/token
-    ports:
-      - "3000:3000"
+    # No external port binding - internal communication only via Docker network
+    expose:
+      - "3000"
     depends_on:
       mysql:
         condition: service_healthy
