@@ -1,20 +1,23 @@
+# Docker Compose untuk LOCAL TESTING sahaja
+# Untuk production deployment di Dokploy, guna docker-compose.yml
+
 version: '3.8'
 
 services:
   # MySQL Database
   mysql:
     image: mysql:8.0
-    container_name: bayarcash_mysql
+    container_name: bayarcash_mysql_local
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-}
       MYSQL_DATABASE: ghl_bayarcash
       MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - mysql_data_local:/var/lib/mysql
       - ./backend/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     ports:
-      - "3306:3306"
+      - "3307:3306"  # Port 3307 untuk avoid conflict
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       timeout: 20s
@@ -27,46 +30,28 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: bayarcash_backend
+    container_name: bayarcash_backend_local
     restart: unless-stopped
     environment:
-      # GHL OAuth Credentials
       CLIENT_ID: ${CLIENT_ID}
       CLIENT_SECRET: ${CLIENT_SECRET}
-      REDIRECT_URI: ${REDIRECT_URI:-https://bayarcash.kodekreatif.my/oauth/callback}
-
-      # Frontend URL
-      FRONTEND_URL: ${FRONTEND_URL:-https://bayarcash.kodekreatif.my}
-
-      # Backend URL
-      BACKEND_URL: ${BACKEND_URL:-https://bayarcash.kodekreatif.my}
-
-      # Server Configuration
+      REDIRECT_URI: ${REDIRECT_URI:-http://localhost:3001/oauth/callback}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
+      BACKEND_URL: ${BACKEND_URL:-http://localhost:3001}
       PORT: 3000
-      NODE_ENV: production
-
-      # MySQL Database Configuration
+      NODE_ENV: development
       DB_HOST: mysql
       DB_USER: root
       DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-}
       DB_NAME: ghl_bayarcash
-
-      # GHL OAuth Endpoint
       GHL_TOKEN_URL: https://services.leadconnectorhq.com/oauth/token
-    # Ports exposed internally - Dokploy akan handle external routing
-    expose:
-      - "3000"
+    ports:
+      - "3001:3000"  # Port 3001 untuk avoid conflict dengan Dokploy
     depends_on:
       mysql:
         condition: service_healthy
     networks:
       - bayarcash_network
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
 
   # Frontend (React + Nginx)
   frontend:
@@ -74,45 +59,37 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: ${VITE_API_URL:-https://bayarcash.kodekreatif.my}
-    container_name: bayarcash_frontend
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3001}
+    container_name: bayarcash_frontend_local
     restart: unless-stopped
-    # Ports exposed internally - Dokploy akan handle external routing
-    expose:
-      - "80"
+    ports:
+      - "8080:80"  # Port 8080 untuk frontend
     depends_on:
       - backend
     networks:
       - bayarcash_network
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
-  # phpMyAdmin (optional - untuk development/debugging)
+  # phpMyAdmin
   phpmyadmin:
     image: phpmyadmin:latest
-    container_name: bayarcash_phpmyadmin
+    container_name: bayarcash_phpmyadmin_local
     restart: unless-stopped
     environment:
       PMA_HOST: mysql
       PMA_PORT: 3306
       PMA_ARBITRARY: 1
     ports:
-      - "8080:80"
+      - "8081:80"  # Port 8081 untuk phpMyAdmin
     depends_on:
       mysql:
         condition: service_healthy
     networks:
       - bayarcash_network
-    profiles:
-      - dev
 
 networks:
   bayarcash_network:
     driver: bridge
 
 volumes:
-  mysql_data:
+  mysql_data_local:
     driver: local
