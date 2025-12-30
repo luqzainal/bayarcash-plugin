@@ -53,8 +53,7 @@ services:
 
       # GHL OAuth Endpoint
       GHL_TOKEN_URL: https://services.leadconnectorhq.com/oauth/token
-    # Ports exposed internally - Dokploy akan handle external routing
-    expose:
+    ports:
       - "3000"
     depends_on:
       mysql:
@@ -77,8 +76,7 @@ services:
         VITE_API_URL: ${VITE_API_URL:-https://bayarcash.kodekreatif.my}
     container_name: bayarcash_frontend
     restart: unless-stopped
-    # Ports exposed internally - Dokploy akan handle external routing
-    expose:
+    ports:
       - "80"
     depends_on:
       - backend
