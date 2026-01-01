@@ -47,22 +47,16 @@ const PaymentIframe = () => {
 
                 const { amount, currency, orderId, locationId, contact, metadata, publishableKey } = data;
 
-                // Detect mode from GHL publishableKey (STRICT - no default)
+                // Detect mode from GHL publishableKey (default to 'live' if not detected)
                 const isTestMode = publishableKey &&
                     (publishableKey.toLowerCase().includes('test') ||
                         publishableKey.toLowerCase().includes('sandbox'));
-                const isLiveMode = publishableKey &&
-                    (publishableKey.toLowerCase().includes('live') ||
-                        publishableKey.toLowerCase().includes('prod'));
 
-                if (!isTestMode && !isLiveMode) {
-                    throw new Error('Invalid publishableKey - must contain "test", "sandbox", "live", or "prod"');
-                }
-
+                // Default to 'live' mode if not explicitly test
                 const paymentMode = isTestMode ? 'test' : 'live';
 
                 console.log('🔑 Publishable Key:', publishableKey);
-                console.log('🎯 Detected Mode:', paymentMode);
+                console.log('🎯 Payment Mode:', paymentMode, isTestMode ? '(detected as test)' : '(defaulting to live)');
 
                 // Set state
                 setPaymentData(data);
