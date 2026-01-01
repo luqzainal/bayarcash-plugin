@@ -533,7 +533,8 @@ app.post('/process-payment', async (req, res) => {
         console.log('💳 Processing payment from GHL iframe:', { locationId, amount, currency, orderId, mode, keyStarting: publishableKey?.substring(0, 5) });
 
         if (!locationId || !amount) {
-            return res.status(400).json({ error: 'Missing required fields: locationId and amount' });
+            console.error('❌ Missing required fields. Received body keys:', Object.keys(req.body));
+            return res.status(400).json({ error: `Missing required fields: locationId (${!!locationId}) and amount (${!!amount})` });
         }
 
         // Get BayarCash Credentials (including PAT for Authorization)
@@ -562,14 +563,14 @@ app.post('/process-payment', async (req, res) => {
                 selectedMode = 'test';
                 console.log('🎯 Mode detected via Key Match: TEST');
             } else {
-                 console.log('⚠️ Key did not match any stored portal keys, falling back to mode param...');
+                console.log('⚠️ Key did not match any stored portal keys, falling back to mode param...');
             }
         }
 
         // 2. Fallback to mode param if key didn't match
         if (!selectedMode) {
-             selectedMode = mode;
-             console.log(`🎯 Using provided mode param: ${selectedMode}`);
+            selectedMode = mode;
+            console.log(`🎯 Using provided mode param: ${selectedMode}`);
         }
 
         if (selectedMode === 'live') {

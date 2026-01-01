@@ -66,14 +66,16 @@ const PaymentIframe = () => {
                 try {
                     console.log('📤 Calling backend /api/process-payment...');
                     const response = await axios.post('/api/process-payment', {
-                        locationId: locationId || data.location?.id,
-                        amount: amount || data.amount,
+                        // Add fallbacks for different data structures (Payment Link vs Invoice)
+                        locationId: locationId || data.location?.id || data.locationId,
+                        amount: amount || data.amount || 0,
                         currency: currency || 'MYR',
                         orderId: orderId || data.order_id,
                         customer_name: contact?.name || 'Customer',
                         customer_email: contact?.email || 'customer@example.com',
                         metadata: metadata,
-                        mode: paymentMode // Pass mode to backend
+                        mode: paymentMode,
+                        publishableKey: publishableKey // Send key to help backend detect mode
                     });
 
                     console.log('✅ Payment intent created:', response.data);
@@ -88,13 +90,15 @@ const PaymentIframe = () => {
                     }
                 } catch (err) {
                     console.error('❌ Error processing:', err);
-                    setError(err.response?.data?.error || err.message || 'Failed to initiate payment');
+                    const errorMessage = err.response?.data?.error || err.message || 'Failed to initiate payment';
+                    setError(errorMessage);
                     setStatus('error');
 
                     // Hantar error balik ke GHL (stringify)
+                    // Use specific backend error message if available
                     const errorMsg = JSON.stringify({
                         type: 'custom_element_error_response',
-                        error: { description: err.message }
+                        error: { description: errorMessage }
                     });
                     window.parent.postMessage(errorMsg, '*');
                 }
@@ -113,12 +117,21 @@ const PaymentIframe = () => {
         console.log('🚀 Sending Ready Signal to GHL:', readyEventMessage);
         window.parent.postMessage(readyEventMessage, '*');
 
+        // Retry sending ready signal every 2 seconds (in case parent wasn't ready)
+        const readyInterval = setInterval(() => {
+            if (!paymentData) {
+                console.log('🔄 Resending Ready Signal...');
+                window.parent.postMessage(readyEventMessage, '*');
+            }
+        }, 2000);
+
         setStatus('waiting_for_payment_data');
 
         return () => {
             window.removeEventListener('message', handleMessage);
+            clearInterval(readyInterval);
         };
-    }, []);
+    }, [paymentData]); // Add paymentData dependency to stop retry when data received
 
     // Handle payment success callback (when redirected back from BayarCash)
     useEffect(() => {
