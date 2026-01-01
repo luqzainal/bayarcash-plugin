@@ -80,22 +80,11 @@ const PaymentIframe = () => {
 
                     if (response.data.paymentUrl) {
                         setStatus('redirecting');
-                        console.log('🔗 Opening payment in popup:', response.data.paymentUrl);
+                        console.log('🔗 Redirecting to payment:', response.data.paymentUrl);
 
-                        // Open in popup to avoid iframe restrictions
-                        const popup = window.open(
-                            response.data.paymentUrl,
-                            'BayarCashPayment',
-                            'width=800,height=700,scrollbars=yes,resizable=yes'
-                        );
-
-                        if (!popup) {
-                            console.warn('⚠️ Popup blocked, redirecting in current window');
-                            window.location.href = response.data.paymentUrl;
-                        } else {
-                            console.log('✅ Payment popup opened');
-                            setStatus('payment_in_progress');
-                        }
+                        // Direct redirect - open in top level window (not iframe)
+                        // This avoids popup blockers and iframe restrictions
+                        window.top.location.href = response.data.paymentUrl;
                     } else {
                         throw new Error('No payment URL returned');
                     }
