@@ -28,9 +28,11 @@ build/
 .DS_Store
 Thumbs.db
 
-# Documentation files (exclude all .md except README.md)
+# Documentation files (exclude all .md except README.md and docs/)
 *.md
 !README.md
+!docs/
+!docs/**
 
 # Additional JS scripts (utility/migration scripts)
 backend/migrate_db.js

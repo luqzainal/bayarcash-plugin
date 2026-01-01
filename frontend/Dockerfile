@@ -14,7 +14,7 @@ RUN npm ci
 COPY . .
 
 # Accept build argument for API URL
-ARG VITE_API_URL
+ARG VITE_API_URL=/api
 ENV VITE_API_URL=$VITE_API_URL
 
 # Build the application
