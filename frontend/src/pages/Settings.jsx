@@ -110,24 +110,18 @@ const Settings = () => {
         return (
             <div className="min-h-screen flex items-center justify-center p-4">
                 <div className="card max-w-md text-center">
-                    <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                     </div>
-                    <h2 className="text-2xl font-bold mb-2">Missing Location ID</h2>
-                    <p className="text-slate-600 mb-6">Please complete the OAuth flow first</p>
-
-                    {/* Debug Info */}
-                    <div className="mb-6 p-3 bg-slate-100 rounded text-xs font-mono text-left break-all">
-                        <p className="font-bold text-slate-500 mb-1">Debug Info:</p>
-                        <p>Params: {searchParams.toString() || 'None'}</p>
-                        <p>URL: {window.location.href}</p>
-                    </div>
+                    <h2 className="text-2xl font-bold mb-2">Configure Location</h2>
+                    <p className="text-slate-600 mb-6">
+                        Please enter the Location ID to configure BayarCash settings.
+                    </p>
 
                     {/* Manual Entry Fallback */}
-                    <div className="mb-6 border-t border-slate-200 pt-4">
-                        <p className="text-sm text-slate-600 mb-2">Or manually enter Location ID:</p>
+                    <div className="mb-6">
                         <form
                             onSubmit={(e) => {
                                 e.preventDefault();
@@ -141,17 +135,29 @@ const Settings = () => {
                             <input
                                 name="manualLocationId"
                                 type="text"
-                                placeholder="e.g. 0b1pGi..."
+                                placeholder="Enter Location ID"
                                 className="input-field text-sm"
                                 required
                             />
-                            <button type="submit" className="btn-primary py-2 px-4 text-sm">
+                            <button type="submit" className="btn-primary py-2 px-4 text-sm whitespace-nowrap">
                                 Go
                             </button>
                         </form>
                     </div>
 
-                    <button onClick={() => navigate('/')} className="btn-secondary text-sm">
+                    <div className="text-left bg-slate-50 p-4 rounded-lg text-sm text-slate-600 mb-6">
+                        <p className="font-semibold mb-2">How to find your Location ID:</p>
+                        <ol className="list-decimal pl-4 space-y-1">
+                            <li>Open your GoHighLevel account</li>
+                            <li>Navigate to the sub-account (Location) settings</li>
+                            <li>Check the URL in your browser address bar:</li>
+                        </ol>
+                        <div className="mt-2 p-2 bg-slate-200 rounded font-mono text-xs break-all">
+                            https://app.gohighlevel.com/v2/location/<span className="bg-yellow-200 px-1 font-bold text-slate-800">TQ5u2L7jxbXt7rPdOccp</span>
+                        </div>
+                    </div>
+
+                    <button onClick={() => navigate('/')} className="btn-secondary text-sm w-full">
                         Back to Home
                     </button>
                 </div>
@@ -243,7 +249,7 @@ const Settings = () => {
                                         name="bayarcash_pat_live"
                                         value={formData.bayarcash_pat_live}
                                         onChange={handleChange}
-                                        placeholder="e.g., eyJhbGciOi..."
+                                        placeholder="Enter your Live Personal Access Token"
                                         className="input-field font-mono text-sm"
                                     />
                                     <p className="text-xs text-slate-500 mt-1">
@@ -262,7 +268,7 @@ const Settings = () => {
                                         name="bayarcash_api_key_live"
                                         value={formData.bayarcash_api_key_live}
                                         onChange={handleChange}
-                                        placeholder="e.g., BLZAjCx7yg4v..."
+                                        placeholder="Enter your Live API Secret Key"
                                         className="input-field font-mono text-sm"
                                     />
                                     <p className="text-xs text-slate-500 mt-1">
@@ -281,7 +287,7 @@ const Settings = () => {
                                         name="bayarcash_portal_key_live"
                                         value={formData.bayarcash_portal_key_live}
                                         onChange={handleChange}
-                                        placeholder="e.g., ynjxee7dH6..."
+                                        placeholder="Enter your Live Portal Key"
                                         className="input-field font-mono text-sm"
                                     />
                                     <p className="text-xs text-slate-500 mt-1">
@@ -302,7 +308,7 @@ const Settings = () => {
                                         name="bayarcash_pat_test"
                                         value={formData.bayarcash_pat_test}
                                         onChange={handleChange}
-                                        placeholder="e.g., eyJhbGciOi..."
+                                        placeholder="Enter your Test Personal Access Token"
                                         className="input-field font-mono text-sm"
                                     />
                                     <p className="text-xs text-slate-500 mt-1">
@@ -321,7 +327,7 @@ const Settings = () => {
                                         name="bayarcash_api_key_test"
                                         value={formData.bayarcash_api_key_test}
                                         onChange={handleChange}
-                                        placeholder="e.g., BLZAjCx7yg4v..."
+                                        placeholder="Enter your Test API Secret Key"
                                         className="input-field font-mono text-sm"
                                     />
                                     <p className="text-xs text-slate-500 mt-1">
@@ -340,7 +346,7 @@ const Settings = () => {
                                         name="bayarcash_portal_key_test"
                                         value={formData.bayarcash_portal_key_test}
                                         onChange={handleChange}
-                                        placeholder="e.g., test_ynjxee..."
+                                        placeholder="Enter your Test Portal Key"
                                         className="input-field font-mono text-sm"
                                     />
                                     <p className="text-xs text-slate-500 mt-1">

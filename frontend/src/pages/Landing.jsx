@@ -2,15 +2,8 @@ import React from 'react';
 
 const Landing = () => {
     const handleLogin = () => {
-        // Redirect to GHL OAuth URL with payment scopes
-        const clientId = '68d3da9b07280c17384ef694-mipy8sp0';
-        const redirectUri = encodeURIComponent('http://localhost:3000/oauth/callback');
-        const scope = encodeURIComponent('payments/orders.readonly payments/orders.write payments/subscriptions.readonly payments/transactions.readonly payments/custom-provider.readonly payments/custom-provider.write products.readonly products/prices.readonly oauth.readonly');
-        const versionId = '68d3da9b07280c17384ef694';
-
-        const oauthUrl = `https://marketplace.gohighlevel.com/oauth/chooselocation?response_type=code&redirect_uri=${redirectUri}&client_id=${clientId}&scope=${scope}&version_id=${versionId}`;
-
-        window.location.href = oauthUrl;
+        // Redirect to GHL Marketplace URL
+        window.location.href = 'https://marketplace.gohighlevel.com/oauth/chooselocation?response_type=code&redirect_uri=https%3A%2F%2Fbayarcash.kodekreatif.my%2Fapi%2Foauth%2Fcallback&client_id=68d3da9b07280c17384ef694-mipy8sp0&scope=payments%2Forders.readonly+payments%2Forders.write+payments%2Fsubscriptions.readonly+payments%2Ftransactions.readonly+payments%2Fcustom-provider.readonly+payments%2Fcustom-provider.write+products.readonly+products%2Fprices.readonly+oauth.readonly&version_id=68d3da9b07280c17384ef694';
     };
 
     return (
