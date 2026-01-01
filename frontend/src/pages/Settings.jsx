@@ -64,6 +64,25 @@ const Settings = () => {
         });
     };
 
+    // Clear credentials for active tab
+    const clearCredentials = () => {
+        if (activeTab === 'live') {
+            setFormData(prev => ({
+                ...prev,
+                bayarcash_pat_live: '',
+                bayarcash_api_key_live: '',
+                bayarcash_portal_key_live: ''
+            }));
+        } else {
+            setFormData(prev => ({
+                ...prev,
+                bayarcash_pat_test: '',
+                bayarcash_api_key_test: '',
+                bayarcash_portal_key_test: ''
+            }));
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
@@ -226,7 +245,6 @@ const Settings = () => {
                                         onChange={handleChange}
                                         placeholder="e.g., eyJhbGciOi..."
                                         className="input-field font-mono text-sm"
-                                        required
                                     />
                                     <p className="text-xs text-slate-500 mt-1">
                                         Your Live BayarCash Personal Access Token (for Authorization header)
@@ -246,7 +264,6 @@ const Settings = () => {
                                         onChange={handleChange}
                                         placeholder="e.g., BLZAjCx7yg4v..."
                                         className="input-field font-mono text-sm"
-                                        required
                                     />
                                     <p className="text-xs text-slate-500 mt-1">
                                         Your Live BayarCash API Secret Key (BayarCash requirement)
@@ -266,7 +283,6 @@ const Settings = () => {
                                         onChange={handleChange}
                                         placeholder="e.g., ynjxee7dH6..."
                                         className="input-field font-mono text-sm"
-                                        required
                                     />
                                     <p className="text-xs text-slate-500 mt-1">
                                         Your Live BayarCash Portal Key (retrieve from console)
@@ -288,7 +304,6 @@ const Settings = () => {
                                         onChange={handleChange}
                                         placeholder="e.g., eyJhbGciOi..."
                                         className="input-field font-mono text-sm"
-                                        required
                                     />
                                     <p className="text-xs text-slate-500 mt-1">
                                         Your Test BayarCash Personal Access Token (for Authorization header)
@@ -308,7 +323,6 @@ const Settings = () => {
                                         onChange={handleChange}
                                         placeholder="e.g., BLZAjCx7yg4v..."
                                         className="input-field font-mono text-sm"
-                                        required
                                     />
                                     <p className="text-xs text-slate-500 mt-1">
                                         Your Test BayarCash API Secret Key (BayarCash requirement)
@@ -328,7 +342,6 @@ const Settings = () => {
                                         onChange={handleChange}
                                         placeholder="e.g., test_ynjxee..."
                                         className="input-field font-mono text-sm"
-                                        required
                                     />
                                     <p className="text-xs text-slate-500 mt-1">
                                         Your Test BayarCash Portal Key (retrieve from console)
@@ -375,6 +388,14 @@ const Settings = () => {
                                 ) : (
                                     'Save Configuration'
                                 )}
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={clearCredentials}
+                                className="px-6 py-2 bg-red-50 text-red-600 rounded-lg font-semibold hover:bg-red-100 transition-colors"
+                            >
+                                Clear Credentials
                             </button>
 
                             <button
