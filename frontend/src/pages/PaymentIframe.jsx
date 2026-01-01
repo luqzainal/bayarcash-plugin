@@ -80,11 +80,11 @@ const PaymentIframe = () => {
 
                     if (response.data.paymentUrl) {
                         setStatus('redirecting');
-                        console.log('🔗 Redirecting to payment:', response.data.paymentUrl);
+                        console.log('🔗 Opening payment in new tab:', response.data.paymentUrl);
 
-                        // Direct redirect - open in top level window (not iframe)
-                        // This avoids popup blockers and iframe restrictions
-                        window.top.location.href = response.data.paymentUrl;
+                        // Open in new tab - this works from inside iframe
+                        // User will complete payment in new tab, then close it
+                        window.open(response.data.paymentUrl, '_blank');
                     } else {
                         throw new Error('No payment URL returned');
                     }
