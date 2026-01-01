@@ -14,6 +14,65 @@ const parsePaymentData = (eventData) => {
     return eventData;
 };
 
+// Success component with auto-close countdown
+const SuccessWithAutoClose = () => {
+    const [countdown, setCountdown] = useState(5);
+    const [canClose, setCanClose] = useState(true);
+
+    useEffect(() => {
+        // Countdown timer
+        const timer = setInterval(() => {
+            setCountdown(prev => {
+                if (prev <= 1) {
+                    clearInterval(timer);
+                    // Try to close the window/tab
+                    try {
+                        window.close();
+                        // If window.close didn't work (browser restriction), show message
+                        setTimeout(() => setCanClose(false), 500);
+                    } catch (e) {
+                        setCanClose(false);
+                    }
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+
+        return () => clearInterval(timer);
+    }, []);
+
+    return (
+        <>
+            <div className="rounded-full h-16 w-16 bg-green-100 mx-auto mb-4 flex items-center justify-center">
+                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+            </div>
+            <h2 className="text-xl font-semibold text-green-800">Payment Successful!</h2>
+            <p className="text-slate-500 mt-2">Your payment has been processed</p>
+
+            {countdown > 0 ? (
+                <p className="text-sm text-slate-400 mt-4">
+                    This window will close in <span className="font-bold text-green-600">{countdown}</span> seconds...
+                </p>
+            ) : canClose ? (
+                <p className="text-sm text-slate-400 mt-4">Closing...</p>
+            ) : (
+                <div className="mt-4">
+                    <p className="text-sm text-slate-500 mb-3">You can now close this tab</p>
+                    <button
+                        onClick={() => window.close()}
+                        className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                    >
+                        Close Tab
+                    </button>
+                </div>
+            )}
+        </>
+    );
+};
+
 const PaymentIframe = () => {
     const [searchParams] = useSearchParams();
     const [status, setStatus] = useState('loading'); // loading, processing, ready_to_pay, redirecting, success, error, waiting_for_payment_data
@@ -290,15 +349,7 @@ const PaymentIframe = () => {
                 )}
 
                 {status === 'success' && (
-                    <>
-                        <div className="rounded-full h-16 w-16 bg-green-100 mx-auto mb-4 flex items-center justify-center">
-                            <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                        </div>
-                        <h2 className="text-xl font-semibold text-green-800">Payment Successful!</h2>
-                        <p className="text-slate-500 mt-2">Your payment has been processed</p>
-                    </>
+                    <SuccessWithAutoClose />
                 )}
 
                 {status === 'error' && (
