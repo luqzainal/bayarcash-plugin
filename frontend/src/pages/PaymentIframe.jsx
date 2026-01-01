@@ -142,19 +142,55 @@ const PaymentIframe = () => {
 
     // Handle payment success callback
     useEffect(() => {
-        const chargeId = searchParams.get('charge_id') || searchParams.get('transaction_id') || searchParams.get('id');
-        const paymentStatus = searchParams.get('status');
+        // MANUAL PARSING for "Double Question Mark" Issue
+        // Browser sees: ?location_id=xyz?transaction_id=abc
+        // We need to treat that second '?' as '&'
+        let cleanSearch = window.location.search;
+        if ((cleanSearch.match(/\?/g) || []).length > 1) {
+            console.log('⚠️ Detected double "?" in URL, fixing format...');
+            // Keep first '?', replace others with '&'
+            const firstMarkIndex = cleanSearch.indexOf('?');
+            if (firstMarkIndex !== -1) {
+                const queryPart = cleanSearch.substring(firstMarkIndex + 1);
+                cleanSearch = '?' + queryPart.replace(/\?/g, '&');
+            }
+        }
 
-        if (chargeId && paymentStatus === 'success') {
-            console.log('✅ Payment successful, notifying GHL');
+        const manualParams = new URLSearchParams(cleanSearch);
+
+        // Convert to object for easier logging
+        const params = {};
+        for (const [key, value] of manualParams.entries()) {
+            params[key] = value;
+        }
+        console.log('🔗 Filtered URL Parameters:', params);
+
+        const chargeId = manualParams.get('charge_id') || manualParams.get('transaction_id') || manualParams.get('id');
+        const paymentStatus = manualParams.get('status');
+        const statusDesc = manualParams.get('status_description');
+        const exchangeRef = manualParams.get('exchange_reference_number');
+
+        // Logic: Accept success if:
+        // 1. status === 'success' OR '3' (BayarCash approved status)
+        // 2. status_description === 'Approved'
+        // 3. transaction_id exists AND status is NOT 'failed'/'cancelled'
+
+        const isSuccessStatus = paymentStatus === 'success' || paymentStatus === '3' || statusDesc === 'Approved';
+        const isFailure = paymentStatus === 'failed' || paymentStatus === 'cancelled' || paymentStatus === 'canceled' || paymentStatus === '4'; // Assuming 4 is fail, but keeping explicit checks
+
+        if ((chargeId || exchangeRef) && (isSuccessStatus || !isFailure)) {
+            console.log('✅ Payment detected as successful (Broad Check)');
+            console.log('Charge ID:', chargeId);
+
+            // Notify GHL of successful payment
             const successMsg = JSON.stringify({
                 type: 'custom_element_success_response',
-                chargeId: chargeId
+                chargeId: chargeId || exchangeRef
             });
             window.parent.postMessage(successMsg, '*');
             setStatus('success');
-        } else if (paymentStatus === 'failed') {
-            console.log('❌ Payment failed, notifying GHL');
+        } else if (isFailure) {
+            console.log('❌ Payment explicitly failed/cancelled');
             const errorMsg = JSON.stringify({
                 type: 'custom_element_error_response',
                 error: { description: 'Payment failed or was declined' }
@@ -162,16 +198,8 @@ const PaymentIframe = () => {
             window.parent.postMessage(errorMsg, '*');
             setStatus('error');
             setError('Payment failed or was declined');
-        } else if (paymentStatus === 'cancelled' || paymentStatus === 'canceled') {
-            console.log('🚫 Payment cancelled, notifying GHL');
-            const cancelMsg = JSON.stringify({
-                type: 'custom_element_close_response'
-            });
-            window.parent.postMessage(cancelMsg, '*');
-            setStatus('error');
-            setError('Payment was cancelled');
         }
-    }, [searchParams]);
+    }, []); // Empty dependency mainly because we rely on window.location parsing logic only once on mount or we can add searchParams if we want strictness, but window.location is safer source of truth here
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">

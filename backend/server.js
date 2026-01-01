@@ -893,9 +893,9 @@ app.get('/', (req, res) => {
         endpoints: {
             oauth: '/oauth/callback',
             settings: '/api/settings/:location_id',
-            banks: '/api/banks',
-            payment: '/api/process-payment',
-            query: '/api/bayarcash-query'
+            banks: '/banks', // Changed from /api/banks since line 491 is app.get('/banks')
+            payment: '/process-payment', // Changed from /api/process-payment since line 529 is app.post('/process-payment')
+            query: '/bayarcash-query' // Changed from /api/bayarcash-query
         }
     });
 });
