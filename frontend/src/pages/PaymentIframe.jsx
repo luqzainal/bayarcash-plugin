@@ -9,6 +9,10 @@ const PaymentIframe = () => {
     const [paymentData, setPaymentData] = useState(null);
     const [debugLogs, setDebugLogs] = useState([]);
 
+    // Nasty hack: Use ref to check status inside interval closure
+    const statusRef = React.useRef(status);
+    useEffect(() => { statusRef.current = status; }, [status]);
+
     const addLog = (msg) => {
         const time = new Date().toLocaleTimeString();
         setDebugLogs(prev => [`[${time}] ${msg}`, ...prev]);
@@ -102,19 +106,35 @@ const PaymentIframe = () => {
 
         window.addEventListener('message', handleMessage);
 
-        // --- 3. HANTAR SIGNAL "SAYA DAH READY" ---
+        // --- 3. HANTAR SIGNAL "SAYA DAH READY" (BERULANG KALI) ---
+        // GHL mungkin belum ready bila iframe load, jadi kita hantar signal setiap 2 saat
+        // sampai kita dapat respon handshake
+
+        addLog(`frame loaded from referrer: ${document.referrer}`);
+
         const readyEventMessage = JSON.stringify({
             type: 'custom_provider_ready',
             loaded: true
         });
 
-        addLog('🚀 Sending custom_provider_ready...');
+        const handshakeInterval = setInterval(() => {
+            if (statusRef.current === 'processing' || statusRef.current === 'ready_to_pay') {
+                clearInterval(handshakeInterval);
+                return;
+            }
+
+            addLog('🚀 Sending ready signal (retry)...');
+            window.parent.postMessage(readyEventMessage, '*');
+        }, 2000);
+
+        // Hantar sekali serta merta
         window.parent.postMessage(readyEventMessage, '*');
 
         setStatus('waiting_for_payment_data');
 
         return () => {
             window.removeEventListener('message', handleMessage);
+            clearInterval(handshakeInterval);
         };
     }, []);
 
