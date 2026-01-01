@@ -701,25 +701,36 @@ app.post('/settings', async (req, res) => {
             const { access_token } = rows[0];
 
             const connectData = {};
+            const disconnectRequests = [];
 
-            // Only add live config if keys are present
+            // --- LIVE MODE LOGIC ---
             if (bayarcash_api_key_live && bayarcash_portal_key_live) {
                 connectData.live = {
                     apiKey: bayarcash_api_key_live,
                     publishableKey: bayarcash_portal_key_live
                 };
+            } else {
+                // No keys = Disconnect Live Mode
+                disconnectRequests.push({ liveMode: true });
             }
 
-            // Only add test config if keys are present
+            // --- TEST MODE LOGIC ---
             if (bayarcash_api_key_test && bayarcash_portal_key_test) {
                 connectData.test = {
                     apiKey: bayarcash_api_key_test,
                     publishableKey: bayarcash_portal_key_test
                 };
+            } else {
+                // No keys = Disconnect Test Mode
+                disconnectRequests.push({ liveMode: false });
             }
 
-            console.log('🔌 Connecting provider in GHL:', JSON.stringify(connectData, null, 2));
+            console.log('🔌 Connection Logic:', {
+                connect: Object.keys(connectData),
+                disconnect: disconnectRequests
+            });
 
+            // 1. Handle CONNECTIONS
             if (Object.keys(connectData).length > 0) {
                 try {
                     await axios.post(
@@ -733,13 +744,12 @@ app.post('/settings', async (req, res) => {
                             }
                         }
                     );
-                    console.log('✅ Provider connected successfully in GHL');
+                    console.log('✅ Connected modes in GHL:', Object.keys(connectData));
                 } catch (ghlError) {
+                    // Retry logic for 401 (Refresh Token)
                     if (ghlError.response?.status === 401) {
-                        console.log('⚠️ Access token expired, refreshing...');
+                        console.log('⚠️ Access token expired during connect, refreshing...');
                         const newAccessToken = await refreshAccessToken(location_id);
-
-                        // Retry with new token
                         await axios.post(
                             `https://services.leadconnectorhq.com/payments/custom-provider/connect?locationId=${location_id}`,
                             connectData,
@@ -751,13 +761,52 @@ app.post('/settings', async (req, res) => {
                                 }
                             }
                         );
-                        console.log('✅ Provider connected successfully after refresh');
+                        console.log('✅ Connected modes after refresh');
                     } else {
-                        throw ghlError;
+                        console.error('❌ Failed to connect GHL provider:', ghlError.response?.data || ghlError.message);
+                        // Don't block the save, just log error
                     }
                 }
-            } else {
-                console.log('⚠️ No valid keys provided for GHL connection, skipping...');
+            }
+
+            // 2. Handle DISCONNECTIONS
+            for (const reqBody of disconnectRequests) {
+                try {
+                    await axios.post(
+                        `https://services.leadconnectorhq.com/payments/custom-provider/disconnect?locationId=${location_id}`,
+                        reqBody,
+                        {
+                            headers: {
+                                'Authorization': `Bearer ${access_token}`,
+                                'Version': '2021-07-28',
+                                'Content-Type': 'application/json'
+                            }
+                        }
+                    );
+                    console.log(`✅ Disconnected ${reqBody.liveMode ? 'Live' : 'Test'} mode in GHL`);
+                } catch (ghlError) {
+                    if (ghlError.response?.status === 401) {
+                        // We could refresh here too, but simplest is to catch and log
+                        // If refresh happened in Connect block, access_token might be stale here?
+                        // Ideally we refetch or update the var, but for now retry with refresh logic if needed
+                        console.log('⚠️ Access token expired during disconnect, refreshing...');
+                        const newAccessToken = await refreshAccessToken(location_id);
+                        await axios.post(
+                            `https://services.leadconnectorhq.com/payments/custom-provider/disconnect?locationId=${location_id}`,
+                            reqBody,
+                            {
+                                headers: {
+                                    'Authorization': `Bearer ${newAccessToken}`,
+                                    'Version': '2021-07-28',
+                                    'Content-Type': 'application/json'
+                                }
+                            }
+                        );
+                        console.log(`✅ Disconnected ${reqBody.liveMode ? 'Live' : 'Test'} mode after refresh`);
+                    } else {
+                        console.error(`❌ Failed to disconnect ${reqBody.liveMode ? 'Live' : 'Test'} mode:`, ghlError.response?.data || ghlError.message);
+                    }
+                }
             }
         }
 
