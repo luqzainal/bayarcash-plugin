@@ -617,9 +617,12 @@ app.post('/webhook/bayarcash-callback', async (req, res) => {
             // Try to extract original GHL orderId from metadata
             try {
                 const metadata = JSON.parse(transaction.metadata || '{}');
-                ghlOrderId = metadata.orderId;
+                // Support both new format (ghlOrderId) and old format (orderId)
+                ghlOrderId = metadata.ghlOrderId || metadata.orderId;
+                console.log('📋 Parsed metadata:', JSON.stringify(metadata, null, 2));
             } catch (e) {
                 console.warn('⚠️ Could not parse metadata:', e.message);
+                console.warn('   Raw metadata value:', transaction.metadata);
             }
 
             console.log('📍 Location ID:', locationId);
@@ -916,10 +919,12 @@ app.post('/process-payment', async (req, res) => {
                     selectedMode,
                     customer_email || null,
                     customer_name || null,
-                    JSON.stringify({ orderId, metadata })
+                    JSON.stringify({ ghlOrderId: orderId, originalMetadata: metadata || {} })
                 ]
             );
             console.log('💾 Transaction stored in database:', transactionId);
+            console.log('   📦 GHL Order ID stored:', orderId);
+            console.log('   📋 Order Number:', orderNumber);
         } catch (dbError) {
             console.error('⚠️ Failed to store transaction (non-critical):', dbError.message);
             // Continue - this is non-critical, payment can still proceed
