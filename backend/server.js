@@ -22,6 +22,23 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // Serve static files (for logo)
 app.use('/public', express.static(path.join(__dirname, 'public')));
 
+// Direct logo endpoint as fallback
+app.get('/logo.jpg', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'logo.jpg'));
+});
+
+// Debug endpoint to check if public folder exists
+app.get('/debug/public', (req, res) => {
+    const fs = require('fs');
+    const publicPath = path.join(__dirname, 'public');
+    try {
+        const files = fs.readdirSync(publicPath);
+        res.json({ path: publicPath, files: files });
+    } catch (err) {
+        res.status(500).json({ error: err.message, path: publicPath });
+    }
+});
+
 // Environment Variables
 const {
     CLIENT_ID,
