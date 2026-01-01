@@ -170,16 +170,23 @@ const PaymentIframe = () => {
         const statusDesc = manualParams.get('status_description');
         const exchangeRef = manualParams.get('exchange_reference_number');
 
-        // Logic: Accept success if:
+        // Logic: Accept success ONLY if:
         // 1. status === 'success' OR '3' (BayarCash approved status)
         // 2. status_description === 'Approved'
-        // 3. transaction_id exists AND status is NOT 'failed'/'cancelled'
+        // IMPORTANT: BayarCash status codes:
+        //   - status=2: FAILED (e.g., Insufficient Funds)
+        //   - status=3: SUCCESS (Approved)
+        //   - status=4: CANCELLED
 
         const isSuccessStatus = paymentStatus === 'success' || paymentStatus === '3' || statusDesc === 'Approved';
-        const isFailure = paymentStatus === 'failed' || paymentStatus === 'cancelled' || paymentStatus === 'canceled' || paymentStatus === '4'; // Assuming 4 is fail, but keeping explicit checks
+        // SECURITY FIX: status=2 is FAILED in BayarCash (Insufficient Funds, etc.)
+        const isFailure = paymentStatus === 'failed' || paymentStatus === 'cancelled' || paymentStatus === 'canceled' || paymentStatus === '2' || paymentStatus === '4';
 
-        if ((chargeId || exchangeRef) && (isSuccessStatus || !isFailure)) {
-            console.log('✅ Payment detected as successful (Broad Check)');
+        console.log('🔍 Payment Status Check:', { paymentStatus, statusDesc, isSuccessStatus, isFailure });
+
+        // SECURITY FIX: Only mark as success if EXPLICITLY successful, not just "not failed"
+        if ((chargeId || exchangeRef) && isSuccessStatus && !isFailure) {
+            console.log('✅ Payment verified as SUCCESSFUL');
             console.log('Charge ID:', chargeId);
 
             // Notify GHL of successful payment
@@ -189,15 +196,19 @@ const PaymentIframe = () => {
             });
             window.parent.postMessage(successMsg, '*');
             setStatus('success');
-        } else if (isFailure) {
-            console.log('❌ Payment explicitly failed/cancelled');
+        } else if (isFailure || (!isSuccessStatus && (chargeId || exchangeRef))) {
+            // Mark as failed if:
+            // 1. Explicitly failed status (2, 4, 'failed', 'cancelled')
+            // 2. OR has chargeId but no success status (unknown/pending treated as failure for safety)
+            console.log('❌ Payment FAILED or NOT successful');
+            console.log('Status:', paymentStatus, 'Description:', statusDesc);
             const errorMsg = JSON.stringify({
                 type: 'custom_element_error_response',
-                error: { description: 'Payment failed or was declined' }
+                error: { description: statusDesc || 'Payment failed or was declined' }
             });
             window.parent.postMessage(errorMsg, '*');
             setStatus('error');
-            setError('Payment failed or was declined');
+            setError(statusDesc || 'Payment failed or was declined');
         }
     }, []); // Empty dependency mainly because we rely on window.location parsing logic only once on mount or we can add searchParams if we want strictness, but window.location is safer source of truth here
 
