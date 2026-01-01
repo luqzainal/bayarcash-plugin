@@ -15,12 +15,12 @@ CREATE TABLE IF NOT EXISTS ghl_integrations (
   user_id VARCHAR(100),
   
   -- BayarCash Live Credentials
-  bayarcash_pat_live VARCHAR(500),
+  bayarcash_pat_live TEXT,
   bayarcash_api_key_live VARCHAR(255),
   bayarcash_portal_key_live VARCHAR(255),
   
   -- BayarCash Test Credentials
-  bayarcash_pat_test VARCHAR(500),
+  bayarcash_pat_test TEXT,
   bayarcash_api_key_test VARCHAR(255),
   bayarcash_portal_key_test VARCHAR(255),
   
