@@ -22,9 +22,30 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // Serve static files (for logo)
 app.use('/public', express.static(path.join(__dirname, 'public')));
 
-// Direct logo endpoint as fallback
+// Direct logo endpoint - explicit serving
 app.get('/logo.jpg', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'logo.jpg'));
+    const logoPath = path.resolve(__dirname, 'public', 'logo.jpg');
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.sendFile(logoPath, (err) => {
+        if (err) {
+            console.error('Error sending logo:', err);
+            res.status(404).json({ error: 'Logo not found', path: logoPath });
+        }
+    });
+});
+
+// Also serve at /public/logo.jpg directly
+app.get('/public/logo.jpg', (req, res) => {
+    const logoPath = path.resolve(__dirname, 'public', 'logo.jpg');
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.sendFile(logoPath, (err) => {
+        if (err) {
+            console.error('Error sending logo:', err);
+            res.status(404).json({ error: 'Logo not found', path: logoPath });
+        }
+    });
 });
 
 // Debug endpoint to check if public folder exists
