@@ -79,12 +79,10 @@ const PaymentIframe = () => {
                     console.log('✅ Payment intent created:', response.data);
 
                     if (response.data.paymentUrl) {
-                        setStatus('redirecting');
-                        console.log('🔗 Opening payment in new tab:', response.data.paymentUrl);
-
-                        // Open in new tab - this works from inside iframe
-                        // User will complete payment in new tab, then close it
-                        window.open(response.data.paymentUrl, '_blank');
+                        // Store URL in paymentData for user to click
+                        setPaymentData(prev => ({ ...prev, paymentUrl: response.data.paymentUrl }));
+                        setStatus('ready_to_pay');
+                        console.log('🔗 Payment URL ready:', response.data.paymentUrl);
                     } else {
                         throw new Error('No payment URL returned');
                     }
@@ -198,6 +196,32 @@ const PaymentIframe = () => {
                                 <p className="text-sm text-slate-600">Order: <span className="font-semibold">{paymentData.orderId}</span></p>
                             </div>
                         )}
+                    </>
+                )}
+
+                {status === 'ready_to_pay' && paymentData?.paymentUrl && (
+                    <>
+                        <div className="rounded-full h-16 w-16 bg-green-100 mx-auto mb-4 flex items-center justify-center">
+                            <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <h2 className="text-xl font-semibold text-slate-800">Payment Ready!</h2>
+                        <p className="text-slate-500 mt-2">Click below to proceed to BayarCash</p>
+                        {paymentData && (
+                            <div className="mt-4 text-left bg-slate-50 p-4 rounded-md">
+                                <p className="text-sm text-slate-600">Amount: <span className="font-semibold">{paymentData.currency} {paymentData.amount}</span></p>
+                            </div>
+                        )}
+                        <a
+                            href={paymentData.paymentUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-6 inline-block px-8 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors shadow-lg"
+                        >
+                            Pay Now with BayarCash
+                        </a>
+                        <p className="text-xs text-slate-400 mt-3">Opens in new tab</p>
                     </>
                 )}
 
