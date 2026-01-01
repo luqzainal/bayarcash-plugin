@@ -1,66 +1,76 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { useSearchParams } from 'react-router-dom';
 
+// Helper to parse GHL data safely
+const parsePaymentData = (eventData) => {
+    if (typeof eventData === 'string') {
+        try {
+            return JSON.parse(eventData);
+        } catch (e) {
+            return null;
+        }
+    }
+    return eventData;
+};
+
 const PaymentIframe = () => {
     const [searchParams] = useSearchParams();
-    const [status, setStatus] = useState('initializing');
+    const [status, setStatus] = useState('loading'); // loading, processing, ready_to_pay, redirecting, success, error, waiting_for_payment_data
     const [error, setError] = useState('');
     const [paymentData, setPaymentData] = useState(null);
+    const processingRef = useRef(false); // Ref to prevent double processing
 
+    // Listen for messages from GHL
     useEffect(() => {
-        // --- 1. SETUP LISTENER DULU ---
+        // Track the interval ID so we can clear it from inside handleMessage
+        const intervalRef = { current: null };
+
         const handleMessage = async (event) => {
-            // Accept messages from GHL and FastPayDirect (BayarCash uses FastPayDirect for processing)
-            const allowedOrigins = [
-                'https://link.fastpaydirect.com',
-                'https://console.bayar.cash',
-                window.location.origin
-            ];
+            // Validate origin (optional but recommended)
+            // if (event.origin !== "https://msgsndr.com") return;
 
-            // Log all messages for debugging
-            console.log('📥 Received message from:', event.origin);
-            console.log('📦 Message data:', event.data);
+            console.log('📩 Message received from parent:', event.data);
 
-            let data = event.data;
+            // Parse data
+            const data = parsePaymentData(event.data);
 
-            // GHL hantar String, kita perlu parse
-            if (typeof data === 'string') {
-                try {
-                    data = JSON.parse(data);
-                } catch (e) {
-                    console.log('⚠️ Could not parse message as JSON, treating as string');
-                    return; // Abaikan jika bukan JSON valid
+            // Validasi: Pastikan data itu dari GHL (biasanya ada type 'payment_initiate_props')
+            // Atau jika object dengan properti locationId/amount (untuk payment link)
+            if (data && (data.type === 'payment_initiate_props' || data.amount)) {
+
+                // STOP THE LOOP IMMEDIATELY when we get valid data
+                if (intervalRef.current) {
+                    clearInterval(intervalRef.current);
+                    intervalRef.current = null;
                 }
-            }
 
-            // Debugging
-            if (data?.type) {
-                console.log('📥 Message received:', data.type);
-                console.log('📦 Full data:', JSON.stringify(data, null, 2));
-            }
+                // Prevent duplicate processing
+                if (processingRef.current) {
+                    console.log('⚠️ Already processing payment, ignoring duplicate message.');
+                    return;
+                }
 
-            // --- 2. TANGKAP DATA PAYMENT ---
-            // GHL hantar event dengan type: 'payment_initiate_props'
-            if (data && data.type === 'payment_initiate_props') {
-                console.log('✅ Handshake Berjaya! Data Payment Diterima:', data);
+                // Double check status state just in case
+                if (status === 'ready_to_pay' || status === 'success' || status === 'processing') return;
 
+                processingRef.current = true; // LOCK
+                console.log('✅ Valid Payment Data detected:', data);
+
+                setPaymentData(data);
+                setStatus('processing');
+
+                // Extract vars
                 const { amount, currency, orderId, locationId, contact, metadata, publishableKey } = data;
 
-                // Detect mode from GHL publishableKey (default to 'live' if not detected)
+                // Detect mode
                 const isTestMode = publishableKey &&
                     (publishableKey.toLowerCase().includes('test') ||
                         publishableKey.toLowerCase().includes('sandbox'));
-
-                // Default to 'live' mode if not explicitly test
                 const paymentMode = isTestMode ? 'test' : 'live';
 
                 console.log('🔑 Publishable Key:', publishableKey);
                 console.log('🎯 Payment Mode:', paymentMode, isTestMode ? '(detected as test)' : '(defaulting to live)');
-
-                // Set state
-                setPaymentData(data);
-                setStatus('processing');
 
                 // Call backend
                 try {
@@ -93,9 +103,9 @@ const PaymentIframe = () => {
                     const errorMessage = err.response?.data?.error || err.message || 'Failed to initiate payment';
                     setError(errorMessage);
                     setStatus('error');
+                    // Do not release lock on error to prevent spam loop
 
                     // Hantar error balik ke GHL (stringify)
-                    // Use specific backend error message if available
                     const errorMsg = JSON.stringify({
                         type: 'custom_element_error_response',
                         error: { description: errorMessage }
@@ -107,8 +117,7 @@ const PaymentIframe = () => {
 
         window.addEventListener('message', handleMessage);
 
-        // --- 3. HANTAR SIGNAL "SAYA DAH READY" (PALING PENTING!) ---
-        // MESTI stringify message!
+        // --- HANTAR SIGNAL "SAYA DAH READY" ---
         const readyEventMessage = JSON.stringify({
             type: 'custom_provider_ready',
             loaded: true
@@ -117,59 +126,48 @@ const PaymentIframe = () => {
         console.log('🚀 Sending Ready Signal to GHL:', readyEventMessage);
         window.parent.postMessage(readyEventMessage, '*');
 
-        // Retry sending ready signal every 2 seconds (in case parent wasn't ready)
-        const readyInterval = setInterval(() => {
-            if (!paymentData) {
-                console.log('🔄 Resending Ready Signal...');
-                window.parent.postMessage(readyEventMessage, '*');
-            }
+        // Retry sending ready signal every 2 seconds
+        intervalRef.current = setInterval(() => {
+            console.log('🔄 Resending Ready Signal...');
+            window.parent.postMessage(readyEventMessage, '*');
         }, 2000);
 
         setStatus('waiting_for_payment_data');
 
         return () => {
             window.removeEventListener('message', handleMessage);
-            clearInterval(readyInterval);
+            if (intervalRef.current) clearInterval(intervalRef.current);
         };
-    }, [paymentData]); // Add paymentData dependency to stop retry when data received
+    }, []); // Empty dependency
 
-    // Handle payment success callback (when redirected back from BayarCash)
+    // Handle payment success callback
     useEffect(() => {
         const chargeId = searchParams.get('charge_id') || searchParams.get('transaction_id') || searchParams.get('id');
         const paymentStatus = searchParams.get('status');
 
         if (chargeId && paymentStatus === 'success') {
             console.log('✅ Payment successful, notifying GHL');
-
-            // Notify GHL of successful payment
             const successMsg = JSON.stringify({
                 type: 'custom_element_success_response',
                 chargeId: chargeId
             });
             window.parent.postMessage(successMsg, '*');
-
             setStatus('success');
         } else if (paymentStatus === 'failed') {
             console.log('❌ Payment failed, notifying GHL');
-
-            // Notify GHL of failed payment
             const errorMsg = JSON.stringify({
                 type: 'custom_element_error_response',
                 error: { description: 'Payment failed or was declined' }
             });
             window.parent.postMessage(errorMsg, '*');
-
             setStatus('error');
             setError('Payment failed or was declined');
         } else if (paymentStatus === 'cancelled' || paymentStatus === 'canceled') {
             console.log('🚫 Payment cancelled, notifying GHL');
-
-            // Notify GHL that payment was cancelled
             const cancelMsg = JSON.stringify({
                 type: 'custom_element_close_response'
             });
             window.parent.postMessage(cancelMsg, '*');
-
             setStatus('error');
             setError('Payment was cancelled');
         }
@@ -178,7 +176,7 @@ const PaymentIframe = () => {
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
             <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full text-center">
-                {status === 'initializing' && (
+                {status === 'loading' && (
                     <>
                         <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
                         <h2 className="text-xl font-semibold text-slate-800">Initializing Payment...</h2>

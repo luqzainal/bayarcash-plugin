@@ -578,8 +578,9 @@ app.post('/process-payment', async (req, res) => {
             pat = config.bayarcash_pat_live;
             apiSecretKey = config.bayarcash_api_key_live;
             portalKey = config.bayarcash_portal_key_live;
+            // Official Production URL (V3)
             apiUrl = 'https://api.console.bayar.cash/v3';
-            console.log('🚀 Using LIVE mode credentials with PRODUCTION URL');
+            console.log('🚀 Using LIVE mode credentials with PRODUCTION URL (api.console.bayar.cash)');
         } else if (selectedMode === 'test') {
             // Use Test credentials
             pat = config.bayarcash_pat_test;
