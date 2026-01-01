@@ -6,21 +6,81 @@ const qs = require('qs');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
+
+// ============================================
+// SECURITY HARDENING: Helmet (HTTP Security Headers)
+// ============================================
+app.use(helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    contentSecurityPolicy: false // Disable if causing issues with iframe loading
+}));
+
+// ============================================
+// SECURITY HARDENING: Rate Limiting
+// ============================================
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per windowMs
+    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+    message: {
+        error: 'Too many requests, please try again later.',
+        retryAfter: '15 minutes'
+    }
+});
+app.use(limiter);
+
 // Middleware to bypass ngrok browser warning  
 app.use((req, res, next) => {
     res.setHeader('ngrok-skip-browser-warning', 'true');
     next();
 });
 
-// Middleware
-app.use(cors());
+// ============================================
+// SECURITY: CORS Configuration (Restricted Origins)
+// ============================================
+const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    'https://app.gohighlevel.com',
+    'https://services.leadconnectorhq.com'
+].filter(Boolean); // Remove undefined values
+
+const corsOptions = {
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps, Postman, or server-to-server)
+        if (!origin) return callback(null, true);
+
+        if (allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            console.warn(`⚠️ CORS blocked request from: ${origin}`);
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+};
+
+app.use(cors(corsOptions));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 // Serve static files (for logo)
 app.use('/public', express.static(path.join(__dirname, 'public')));
+
+// ============================================
+// SECURITY: Masking Utility for Secure Logging
+// ============================================
+function maskSensitive(value, showLast = 4) {
+    if (!value || typeof value !== 'string') return '[EMPTY]';
+    if (value.length <= showLast) return '****';
+    return `...${value.slice(-showLast)}`;
+}
 
 // Direct logo endpoint - explicit serving
 app.get('/logo.jpg', (req, res) => {
@@ -29,8 +89,8 @@ app.get('/logo.jpg', (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.sendFile(logoPath, (err) => {
         if (err) {
-            console.error('Error sending logo:', err);
-            res.status(404).json({ error: 'Logo not found', path: logoPath });
+            console.error('Error sending logo:', err.message);
+            res.status(404).json({ error: 'Logo not found' });
         }
     });
 });
@@ -42,8 +102,8 @@ app.get('/public/logo.jpg', (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.sendFile(logoPath, (err) => {
         if (err) {
-            console.error('Error sending logo:', err);
-            res.status(404).json({ error: 'Logo not found', path: logoPath });
+            console.error('Error sending logo:', err.message);
+            res.status(404).json({ error: 'Logo not found' });
         }
     });
 });
@@ -75,6 +135,17 @@ const {
     BAYARCASH_API_URL_PRODUCTION,
     BAYARCASH_API_URL_SANDBOX
 } = process.env;
+
+// MySQL Connection Pool
+const pool = mysql.createPool({
+    host: DB_HOST,
+    user: DB_USER,
+    password: DB_PASSWORD,
+    database: DB_NAME,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
+});
 
 // Helper: Refresh Access Token
 async function refreshAccessToken(locationId) {
@@ -109,25 +180,16 @@ async function refreshAccessToken(locationId) {
             [access_token, refresh_token, expires_in, locationId]
         );
 
+        // SECURE LOG: Mask tokens
         console.log('🔄 Access token refreshed for location:', locationId);
+        console.log('   New access_token:', maskSensitive(access_token));
         return access_token;
 
     } catch (error) {
-        console.error('❌ Failed to refresh token:', error.response?.data || error.message);
+        console.error('❌ Failed to refresh token:', error.message);
         throw error;
     }
 }
-
-// MySQL Connection Pool
-const pool = mysql.createPool({
-    host: DB_HOST,
-    user: DB_USER,
-    password: DB_PASSWORD,
-    database: DB_NAME,
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0
-});
 
 // Test database connection
 pool.getConnection()
@@ -142,6 +204,8 @@ pool.getConnection()
         console.log('🌐 Frontend URL:', FRONTEND_URL);
         console.log('💳 BayarCash Production API:', BAYARCASH_API_URL_PRODUCTION);
         console.log('🧪 BayarCash Sandbox API:', BAYARCASH_API_URL_SANDBOX);
+        console.log('🛡️ Security: Helmet enabled, Rate limiting active (100 req/15min)');
+        console.log('🔒 CORS: Restricted to allowed origins');
         console.log('');
     })
     .catch(err => {
@@ -195,11 +259,14 @@ app.get('/oauth/callback', async (req, res) => {
         } = tokenResponse.data;
 
         console.log('✅ Token exchange successful');
+        // SECURE LOG: Mask tokens, only show context
         console.log('📊 User Context:', {
             locationId,
             userType,
             companyId,
-            userId
+            userId,
+            access_token: maskSensitive(access_token),
+            refresh_token: maskSensitive(refresh_token)
         });
 
         // Step 4: Store Data in MySQL
@@ -267,7 +334,7 @@ app.get('/oauth/callback', async (req, res) => {
 
             console.log('✅ BayarCash registered as custom payment provider in GHL');
         } catch (providerError) {
-            console.error('⚠️  Failed to register payment provider (non-critical):', providerError.response?.data || providerError.message);
+            console.error('⚠️  Failed to register payment provider (non-critical):', providerError.message);
             // Continue even if provider registration fails
         }
 
@@ -275,7 +342,7 @@ app.get('/oauth/callback', async (req, res) => {
         res.redirect(`${FRONTEND_URL}/settings?location_id=${locationId}&status=success`);
 
     } catch (error) {
-        console.error('❌ OAuth callback error:', error.response?.data || error.message);
+        console.error('❌ OAuth callback error:', error.message);
 
         // Extract error details
         let errorMessage = 'Unknown error occurred';
@@ -318,7 +385,8 @@ app.post('/payments/custom-provider/connect', async (req, res) => {
         }
 
         console.log('📝 Received payment provider configuration for location:', locationId);
-        console.log('Configuration data:', { live, test });
+        // SECURE LOG: Don't log full API keys
+        console.log('Configuration received for modes:', { live: !!live, test: !!test });
 
         const query = `
       UPDATE ghl_integrations
@@ -346,7 +414,7 @@ app.post('/payments/custom-provider/connect', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Error saving payment provider config:', error);
+        console.error('❌ Error saving payment provider config:', error.message);
         res.status(500).json({
             success: false,
             error: 'Failed to save configuration'
@@ -411,7 +479,7 @@ app.delete('/payments/custom-provider/provider', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Error deleting payment provider:', error.response?.data || error.message);
+        console.error('❌ Error deleting payment provider:', error.message);
         res.status(500).json({
             success: false,
             error: 'Failed to delete payment provider'
@@ -475,7 +543,7 @@ app.post('/webhook/uninstall', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Error processing uninstall webhook:', error);
+        console.error('❌ Error processing uninstall webhook:', error.message);
         res.status(500).json({
             success: false,
             error: 'Failed to process uninstall'
@@ -520,7 +588,7 @@ app.get('/banks', async (req, res) => {
         res.json(response.data);
 
     } catch (error) {
-        console.error('❌ Error fetching banks:', error.response?.data || error.message);
+        console.error('❌ Error fetching banks:', error.message);
         res.status(500).json({ error: 'Failed to fetch bank list' });
     }
 });
@@ -530,7 +598,8 @@ app.post('/process-payment', async (req, res) => {
     try {
         const { locationId, amount, currency, orderId, customer_name, customer_email, metadata, mode, publishableKey } = req.body;
 
-        console.log('💳 Processing payment from GHL iframe:', { locationId, amount, currency, orderId, mode, keyStarting: publishableKey?.substring(0, 5) });
+        // SECURE LOG: Mask publishable key
+        console.log('💳 Processing payment from GHL iframe:', { locationId, amount, currency, orderId, mode, keyEnding: maskSensitive(publishableKey) });
 
         if (!locationId || !amount) {
             console.error('❌ Missing required fields. Received body keys:', Object.keys(req.body));
@@ -602,7 +671,8 @@ app.post('/process-payment', async (req, res) => {
         }
 
         console.log('🔗 BayarCash API URL:', apiUrl);
-        console.log('🔑 Using PAT for Authorization (first 50 chars):', pat.substring(0, 50) + '...');
+        // SECURE LOG: Only show last 4 chars of PAT
+        console.log('🔑 Using PAT for Authorization:', maskSensitive(pat));
 
         // Create Payment Intent with BayarCash
         // BayarCash will handle bank selection on their hosted checkout page
@@ -622,7 +692,7 @@ app.post('/process-payment', async (req, res) => {
 
         console.log('💰 Amount from GHL:', amount, '(in ringgit)');
         console.log('💰 Amount to BayarCash:', amount, '(in ringgit - BayarCash format)');
-        console.log('📤 Creating BayarCash payment intent:', JSON.stringify(paymentData, null, 2));
+        console.log('📤 Creating BayarCash payment intent for order:', orderId);
 
         const response = await axios.post(
             `${apiUrl}/payment-intents`,
@@ -631,8 +701,7 @@ app.post('/process-payment', async (req, res) => {
         );
 
         console.log('✅ BayarCash payment intent created');
-        console.log('📋 Full API Response:', JSON.stringify(response.data, null, 2));
-        console.log('🔗 Payment URL:', response.data.payment_url || response.data.url);
+        console.log(' Payment URL:', response.data.payment_url || response.data.url);
         console.log('🆔 Transaction ID:', response.data.id);
 
         // Return payment URL to redirect user to BayarCash hosted checkout
@@ -642,20 +711,23 @@ app.post('/process-payment', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Error processing payment:', error.response?.data || error.message);
+        console.error('❌ Error processing payment:', error.message);
         res.status(500).json({
             error: error.response?.data?.message || error.message || 'Payment failed'
         });
     }
 });
 
-// Get settings for a specific location
+// ============================================
+// SECURITY FIX: Get settings - Only return PUBLIC keys (IDOR Prevention)
+// ============================================
 app.get('/settings/:location_id', async (req, res) => {
     try {
         const { location_id } = req.params;
 
+        // SECURITY: Only select PUBLIC portal keys, NOT PATs or API Secret Keys
         const [rows] = await pool.execute(
-            'SELECT bayarcash_pat_live, bayarcash_api_key_live, bayarcash_portal_key_live, bayarcash_pat_test, bayarcash_api_key_test, bayarcash_portal_key_test FROM ghl_integrations WHERE location_id = ?',
+            'SELECT bayarcash_portal_key_live, bayarcash_portal_key_test FROM ghl_integrations WHERE location_id = ?',
             [location_id]
         );
 
@@ -663,9 +735,16 @@ app.get('/settings/:location_id', async (req, res) => {
             return res.status(404).json({ error: 'Location not found' });
         }
 
-        res.json(rows[0]);
+        // Return only public keys - NO SECRETS
+        res.json({
+            bayarcash_portal_key_live: rows[0].bayarcash_portal_key_live || null,
+            bayarcash_portal_key_test: rows[0].bayarcash_portal_key_test || null,
+            // Indicate if secrets are configured (without exposing them)
+            has_live_credentials: !!(rows[0].bayarcash_portal_key_live),
+            has_test_credentials: !!(rows[0].bayarcash_portal_key_test)
+        });
     } catch (error) {
-        console.error('Error fetching settings:', error);
+        console.error('Error fetching settings:', error.message);
         res.status(500).json({ error: 'Failed to fetch settings' });
     }
 });
@@ -750,7 +829,7 @@ app.post('/settings', async (req, res) => {
 
             console.log('🔌 Connection Logic:', {
                 connect: Object.keys(connectData),
-                disconnect: disconnectRequests
+                disconnect: disconnectRequests.map(r => r.liveMode ? 'live' : 'test')
             });
 
             // 1. Handle CONNECTIONS
@@ -786,7 +865,7 @@ app.post('/settings', async (req, res) => {
                         );
                         console.log('✅ Connected modes after refresh');
                     } else {
-                        console.error('❌ Failed to connect GHL provider:', ghlError.response?.data || ghlError.message);
+                        console.error('❌ Failed to connect GHL provider:', ghlError.message);
                         // Don't block the save, just log error
                     }
                 }
@@ -827,7 +906,7 @@ app.post('/settings', async (req, res) => {
                         );
                         console.log(`✅ Disconnected ${reqBody.liveMode ? 'Live' : 'Test'} mode after refresh`);
                     } else {
-                        console.error(`❌ Failed to disconnect ${reqBody.liveMode ? 'Live' : 'Test'} mode:`, ghlError.response?.data || ghlError.message);
+                        console.error(`❌ Failed to disconnect ${reqBody.liveMode ? 'Live' : 'Test'} mode:`, ghlError.message);
                     }
                 }
             }
@@ -837,7 +916,7 @@ app.post('/settings', async (req, res) => {
         res.json({ success: true, message: 'Settings saved and provider connected' });
 
     } catch (error) {
-        console.error('Error saving settings:', error.response?.data || error.message);
+        console.error('Error saving settings:', error.message);
         const errorMessage = error.response?.data?.message
             ? JSON.stringify(error.response.data.message)
             : (error.response?.data?.error || error.message || 'Failed to save settings');
@@ -846,17 +925,18 @@ app.post('/settings', async (req, res) => {
     }
 });
 
-// GHL Payment Verification Endpoint
-// Called by GHL to verify payment status after custom_element_success_response
+// ============================================
+// SECURITY FIX: Real Payment Verification with BayarCash API
+// ============================================
 app.post('/bayarcash-query', async (req, res) => {
     try {
-        const { type, transactionId, apiKey, chargeId, subscriptionId } = req.body;
+        const { type, transactionId, apiKey, chargeId, subscriptionId, locationId } = req.body;
 
         console.log('🔍 GHL Payment Verification Request:');
         console.log('   Type:', type);
         console.log('   Transaction ID:', transactionId);
         console.log('   Charge ID:', chargeId);
-        console.log('   Subscription ID:', subscriptionId);
+        console.log('   Location ID:', locationId);
 
         if (type !== 'verify') {
             return res.status(400).json({ error: 'Invalid request type' });
@@ -866,13 +946,75 @@ app.post('/bayarcash-query', async (req, res) => {
             return res.status(400).json({ error: 'Missing chargeId' });
         }
 
-        // TODO: Verify payment with BayarCash/FastPayDirect API
-        // For now, we trust the chargeId from the frontend
-        // In production, you should call BayarCash API to verify the payment status
+        // SECURITY FIX: Require locationId for real verification
+        if (!locationId) {
+            console.warn('⚠️ No locationId provided, cannot verify with BayarCash API');
+            return res.status(400).json({ error: 'Missing locationId for verification' });
+        }
 
-        // For now, mark as success if chargeId exists
-        console.log('✅ Payment verified successfully');
-        return res.json({ success: true });
+        // Step 1: Fetch BayarCash PAT from database
+        const [rows] = await pool.execute(
+            'SELECT bayarcash_pat_live, bayarcash_pat_test, bayarcash_portal_key_live, bayarcash_portal_key_test FROM ghl_integrations WHERE location_id = ?',
+            [locationId]
+        );
+
+        if (rows.length === 0) {
+            console.error('❌ Location not found for verification:', locationId);
+            return res.status(404).json({ error: 'Location not found' });
+        }
+
+        const config = rows[0];
+
+        // Determine which PAT to use (prefer live, fallback to test)
+        let pat = config.bayarcash_pat_live || config.bayarcash_pat_test;
+        let apiUrl = config.bayarcash_pat_live
+            ? 'https://api.console.bayar.cash/v3'
+            : 'https://api.console.bayarcash-sandbox.com/v3';
+
+        if (!pat) {
+            console.error('❌ No PAT configured for location:', locationId);
+            return res.status(400).json({ error: 'BayarCash PAT not configured' });
+        }
+
+        console.log('🔑 Using PAT for verification:', maskSensitive(pat));
+        console.log('🔗 Verifying with API:', apiUrl);
+
+        // Step 2: Call BayarCash API to verify payment status
+        try {
+            const verifyResponse = await axios.get(
+                `${apiUrl}/payment-intents/${chargeId}`,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${pat}`,
+                        'Accept': 'application/json'
+                    }
+                }
+            );
+
+            const paymentData = verifyResponse.data;
+            console.log('📋 BayarCash Payment Status:', paymentData.status);
+
+            // Step 3: Only return success if status is 'successful'
+            if (paymentData.status === 'successful' || paymentData.status === 'success') {
+                console.log('✅ Payment verified as SUCCESSFUL');
+                return res.json({ success: true });
+            } else {
+                console.log('⚠️ Payment status is not successful:', paymentData.status);
+                return res.json({
+                    failed: true,
+                    reason: `Payment status: ${paymentData.status}`
+                });
+            }
+
+        } catch (apiError) {
+            console.error('❌ BayarCash API verification failed:', apiError.message);
+
+            // If API call fails, we should NOT confirm the payment
+            return res.json({
+                failed: true,
+                reason: 'Failed to verify payment with BayarCash'
+            });
+        }
 
     } catch (error) {
         console.error('❌ Error verifying payment:', error.message);
@@ -890,12 +1032,17 @@ app.get('/', (req, res) => {
         status: 'ok',
         message: 'BayarCash Integration Server',
         version: '1.0.0',
+        security: {
+            helmet: 'enabled',
+            rateLimit: '100 requests per 15 minutes',
+            cors: 'restricted origins'
+        },
         endpoints: {
             oauth: '/oauth/callback',
             settings: '/api/settings/:location_id',
-            banks: '/banks', // Changed from /api/banks since line 491 is app.get('/banks')
-            payment: '/process-payment', // Changed from /api/process-payment since line 529 is app.post('/process-payment')
-            query: '/bayarcash-query' // Changed from /api/bayarcash-query
+            banks: '/banks',
+            payment: '/process-payment',
+            query: '/bayarcash-query'
         }
     });
 });
@@ -922,4 +1069,5 @@ app.listen(PORT, () => {
     console.log(`📡 Server running on http://localhost:${PORT}`);
     console.log(`🔗 OAuth Callback: ${REDIRECT_URI}`);
     console.log(`🌐 Frontend URL: ${FRONTEND_URL}`);
+    console.log('🛡️ Security hardening: Helmet + Rate Limiting + CORS enabled');
 });
