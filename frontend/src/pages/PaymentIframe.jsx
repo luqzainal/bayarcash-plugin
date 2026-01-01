@@ -263,17 +263,17 @@ const PaymentIframe = () => {
                                 <p className="text-sm text-slate-600">Amount: <span className="font-semibold">{paymentData.currency} {paymentData.amount}</span></p>
                             </div>
                         )}
-                        {/* CRITICAL FIX: Redirect within iframe (not new tab) so postMessage works back to GHL */}
-                        <button
-                            onClick={() => {
-                                console.log('🔗 Redirecting to BayarCash within iframe...');
-                                window.location.href = paymentData.paymentUrl;
-                            }}
-                            className="mt-6 inline-block px-8 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors shadow-lg cursor-pointer"
+                        {/* Open in new tab - banks block iframe. postMessage handled via return URL callback */}
+                        <a
+                            href={paymentData.paymentUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-6 inline-block px-8 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors shadow-lg"
                         >
                             Pay Now with BayarCash
-                        </button>
-                        <p className="text-xs text-slate-400 mt-3">You will be redirected to complete payment</p>
+                        </a>
+                        <p className="text-xs text-slate-400 mt-3">Opens payment page in new tab</p>
+                        <p className="text-xs text-slate-500 mt-1">After payment, return here to confirm</p>
                     </>
                 )}
 

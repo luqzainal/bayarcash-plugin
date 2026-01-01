@@ -552,6 +552,191 @@ app.post('/webhook/uninstall', async (req, res) => {
 });
 
 // ============================================
+// BAYARCASH CALLBACK WEBHOOK
+// ============================================
+// Called by BayarCash server-to-server when payment status changes
+app.post('/webhook/bayarcash-callback', async (req, res) => {
+    try {
+        console.log('🔔 BayarCash Callback Received:');
+        console.log('   Body:', JSON.stringify(req.body, null, 2));
+
+        const {
+            transaction_id,
+            order_number,
+            exchange_reference_number,
+            exchange_transaction_id,
+            status,
+            status_description,
+            amount,
+            currency,
+            payer_name,
+            payer_email,
+            checksum
+        } = req.body;
+
+        console.log('📋 Payment Details:');
+        console.log('   Transaction ID:', transaction_id);
+        console.log('   Order Number:', order_number);
+        console.log('   Status:', status, '-', status_description);
+        console.log('   Amount:', currency, amount);
+
+        // BayarCash status codes:
+        // status=2: FAILED
+        // status=3: SUCCESS (Approved)
+        // status=4: CANCELLED
+
+        if (status === 3 || status === '3' || status_description === 'Approved') {
+            console.log('✅ Payment SUCCESSFUL via webhook callback');
+
+            // Step 1: Lookup transaction in database to get locationId and original GHL orderId
+            const [txRows] = await pool.execute(
+                'SELECT location_id, bayarcash_order_id, metadata FROM payment_transactions WHERE transaction_id = ?',
+                [transaction_id]
+            );
+
+            if (txRows.length === 0) {
+                console.error('❌ Transaction not found in database:', transaction_id);
+                // Try to find by order_number as fallback
+                const [orderRows] = await pool.execute(
+                    'SELECT location_id, bayarcash_order_id, metadata FROM payment_transactions WHERE bayarcash_order_id = ?',
+                    [order_number]
+                );
+
+                if (orderRows.length === 0) {
+                    console.error('❌ Cannot find transaction by order_number either:', order_number);
+                    return res.json({ received: true, warning: 'Transaction not found' });
+                }
+
+                txRows.push(orderRows[0]);
+            }
+
+            const transaction = txRows[0];
+            const locationId = transaction.location_id;
+            let ghlOrderId = null;
+
+            // Try to extract original GHL orderId from metadata
+            try {
+                const metadata = JSON.parse(transaction.metadata || '{}');
+                ghlOrderId = metadata.orderId;
+            } catch (e) {
+                console.warn('⚠️ Could not parse metadata:', e.message);
+            }
+
+            console.log('📍 Location ID:', locationId);
+            console.log('📦 GHL Order ID:', ghlOrderId);
+
+            // Step 2: Update transaction status in our database
+            await pool.execute(
+                'UPDATE payment_transactions SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE transaction_id = ?',
+                ['success', transaction_id]
+            );
+            console.log('💾 Transaction status updated to success');
+
+            // Step 3: Get access token for this location
+            const [locationRows] = await pool.execute(
+                'SELECT access_token, refresh_token FROM ghl_integrations WHERE location_id = ?',
+                [locationId]
+            );
+
+            if (locationRows.length === 0) {
+                console.error('❌ Location not found in ghl_integrations:', locationId);
+                return res.json({ received: true, warning: 'Location not found' });
+            }
+
+            let accessToken = locationRows[0].access_token;
+
+            // Step 4: Call GHL API to record payment
+            if (ghlOrderId) {
+                try {
+                    console.log('📤 Calling GHL Record Payment API...');
+
+                    const recordPaymentResponse = await axios.post(
+                        `https://services.leadconnectorhq.com/payments/orders/${ghlOrderId}/record-payment`,
+                        {
+                            altId: locationId,
+                            altType: 'location',
+                            mode: 'bayarcash' // Payment method identifier
+                        },
+                        {
+                            headers: {
+                                'Authorization': `Bearer ${accessToken}`,
+                                'Version': '2021-07-28',
+                                'Content-Type': 'application/json'
+                            }
+                        }
+                    );
+
+                    console.log('✅ GHL Payment recorded successfully!');
+                    console.log('   Response:', JSON.stringify(recordPaymentResponse.data, null, 2));
+
+                } catch (ghlError) {
+                    if (ghlError.response?.status === 401) {
+                        // Token expired, try to refresh
+                        console.log('⚠️ Access token expired, refreshing...');
+                        try {
+                            accessToken = await refreshAccessToken(locationId);
+
+                            // Retry with new token
+                            const retryResponse = await axios.post(
+                                `https://services.leadconnectorhq.com/payments/orders/${ghlOrderId}/record-payment`,
+                                {
+                                    altId: locationId,
+                                    altType: 'location',
+                                    mode: 'bayarcash'
+                                },
+                                {
+                                    headers: {
+                                        'Authorization': `Bearer ${accessToken}`,
+                                        'Version': '2021-07-28',
+                                        'Content-Type': 'application/json'
+                                    }
+                                }
+                            );
+                            console.log('✅ GHL Payment recorded after token refresh!');
+                        } catch (refreshError) {
+                            console.error('❌ Failed to refresh token or record payment:', refreshError.message);
+                        }
+                    } else {
+                        console.error('❌ GHL API Error:', ghlError.response?.data || ghlError.message);
+                    }
+                }
+            } else {
+                console.warn('⚠️ No GHL orderId found, cannot call record-payment API');
+                console.log('   Order number was:', order_number);
+            }
+
+        } else if (status === 2 || status === '2') {
+            console.log('❌ Payment FAILED via webhook callback');
+            console.log('   Reason:', status_description);
+
+            // Update transaction status
+            await pool.execute(
+                'UPDATE payment_transactions SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE transaction_id = ?',
+                ['failed', transaction_id]
+            );
+        } else if (status === 4 || status === '4') {
+            console.log('⚠️ Payment CANCELLED via webhook callback');
+
+            // Update transaction status
+            await pool.execute(
+                'UPDATE payment_transactions SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE transaction_id = ?',
+                ['cancelled', transaction_id]
+            );
+        } else {
+            console.log('❓ Unknown status:', status);
+        }
+
+        // Always return 200 OK to acknowledge receipt
+        res.json({ received: true, status: 'acknowledged' });
+
+    } catch (error) {
+        console.error('❌ Error processing BayarCash callback:', error.message);
+        // Still return 200 to prevent retries
+        res.json({ received: true, error: error.message });
+    }
+});
+
+// ============================================
 // BAYARCASH PAYMENT ENDPOINTS
 // ============================================
 
@@ -677,6 +862,8 @@ app.post('/process-payment', async (req, res) => {
         // Create Payment Intent with BayarCash
         // BayarCash will handle bank selection on their hosted checkout page
         const returnUrl = `${process.env.FRONTEND_URL}/payment-iframe?location_id=${locationId}`;
+        // Callback URL for server-to-server notification when payment completes
+        const callbackUrl = `${process.env.BACKEND_URL || 'http://localhost:3000'}/webhook/bayarcash-callback`;
 
         const paymentData = {
             payment_channel: 1, // FPX (BayarCash will show bank selection)
@@ -685,10 +872,12 @@ app.post('/process-payment', async (req, res) => {
             amount: amount, // BayarCash expects amount in ringgit (e.g., 5 for RM 5.00), NOT cents
             payer_name: customer_name || 'Customer',
             payer_email: customer_email || 'customer@example.com',
-            return_url: returnUrl // Redirect back to iframe after payment
+            return_url: returnUrl, // Redirect back to iframe after payment
+            callback_url: callbackUrl // Server-to-server callback when payment completes
         };
 
         console.log('🔙 Return URL:', returnUrl);
+        console.log('🔔 Callback URL:', callbackUrl);
 
         console.log('💰 Amount from GHL:', amount, '(in ringgit)');
         console.log('💰 Amount to BayarCash:', amount, '(in ringgit - BayarCash format)');
@@ -701,13 +890,45 @@ app.post('/process-payment', async (req, res) => {
         );
 
         console.log('✅ BayarCash payment intent created');
-        console.log(' Payment URL:', response.data.payment_url || response.data.url);
+        console.log('🔗 Payment URL:', response.data.payment_url || response.data.url);
         console.log('🆔 Transaction ID:', response.data.id);
+
+        // Store transaction in database for webhook lookup
+        const transactionId = response.data.id;
+        const orderNumber = paymentData.order_number;
+
+        try {
+            await pool.execute(
+                `INSERT INTO payment_transactions 
+                 (location_id, transaction_id, bayarcash_order_id, amount, currency, status, mode, customer_email, customer_name, metadata) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 ON DUPLICATE KEY UPDATE 
+                 bayarcash_order_id = VALUES(bayarcash_order_id),
+                 status = VALUES(status),
+                 updated_at = CURRENT_TIMESTAMP`,
+                [
+                    locationId,
+                    transactionId,
+                    orderNumber,
+                    amount,
+                    currency || 'MYR',
+                    'pending',
+                    selectedMode,
+                    customer_email || null,
+                    customer_name || null,
+                    JSON.stringify({ orderId, metadata })
+                ]
+            );
+            console.log('💾 Transaction stored in database:', transactionId);
+        } catch (dbError) {
+            console.error('⚠️ Failed to store transaction (non-critical):', dbError.message);
+            // Continue - this is non-critical, payment can still proceed
+        }
 
         // Return payment URL to redirect user to BayarCash hosted checkout
         res.json({
             paymentUrl: response.data.payment_url || response.data.url,
-            transactionId: response.data.id
+            transactionId: transactionId
         });
 
     } catch (error) {
