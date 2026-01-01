@@ -528,9 +528,9 @@ app.get('/banks', async (req, res) => {
 // Process Payment (Called by PaymentIframe from GHL)
 app.post('/process-payment', async (req, res) => {
     try {
-        const { locationId, amount, currency, orderId, customer_name, customer_email, metadata, mode } = req.body;
+        const { locationId, amount, currency, orderId, customer_name, customer_email, metadata, mode, publishableKey } = req.body;
 
-        console.log('💳 Processing payment from GHL iframe:', { locationId, amount, currency, orderId, mode });
+        console.log('💳 Processing payment from GHL iframe:', { locationId, amount, currency, orderId, mode, keyStarting: publishableKey?.substring(0, 5) });
 
         if (!locationId || !amount) {
             return res.status(400).json({ error: 'Missing required fields: locationId and amount' });
@@ -549,16 +549,37 @@ app.post('/process-payment', async (req, res) => {
         const config = rows[0];
 
         // Select credentials based on mode parameter
+        // Select credentials based on publishableKey match OR mode parameter
         let pat, apiSecretKey, portalKey, apiUrl;
+        let selectedMode = null;
 
-        if (mode === 'live') {
+        // 1. Try to match by Publishable Key (Exact Match) - Most Robust
+        if (publishableKey) {
+            if (publishableKey === config.bayarcash_portal_key_live) {
+                selectedMode = 'live';
+                console.log('🎯 Mode detected via Key Match: LIVE');
+            } else if (publishableKey === config.bayarcash_portal_key_test) {
+                selectedMode = 'test';
+                console.log('🎯 Mode detected via Key Match: TEST');
+            } else {
+                 console.log('⚠️ Key did not match any stored portal keys, falling back to mode param...');
+            }
+        }
+
+        // 2. Fallback to mode param if key didn't match
+        if (!selectedMode) {
+             selectedMode = mode;
+             console.log(`🎯 Using provided mode param: ${selectedMode}`);
+        }
+
+        if (selectedMode === 'live') {
             // Use Live credentials
             pat = config.bayarcash_pat_live;
             apiSecretKey = config.bayarcash_api_key_live;
             portalKey = config.bayarcash_portal_key_live;
             apiUrl = 'https://api.console.bayar.cash/v3';
             console.log('🚀 Using LIVE mode credentials with PRODUCTION URL');
-        } else if (mode === 'test') {
+        } else if (selectedMode === 'test') {
             // Use Test credentials
             pat = config.bayarcash_pat_test;
             apiSecretKey = config.bayarcash_api_key_test;
