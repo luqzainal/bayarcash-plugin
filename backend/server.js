@@ -209,7 +209,7 @@ app.get('/oauth/callback', async (req, res) => {
                 name: 'BayarCash Payment Integration',
                 description: 'Accept payments in Malaysia via BayarCash - supports FPX, credit/debit cards, and e-wallets.',
                 paymentsUrl: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/payment-iframe`,
-                queryUrl: `${process.env.BACKEND_URL || 'http://localhost:3000'}/api/bayarcash-query`,
+                queryUrl: `${process.env.BACKEND_URL || 'http://localhost:3000'}/bayarcash-query`,
                 configUrl: `${process.env.BACKEND_URL || 'http://localhost:3000'}/payments/custom-provider/connect`,
                 imageUrl: `${process.env.BACKEND_URL || 'http://localhost:3000'}/public/logo.jpg`,
                 supportsSubscriptionSchedule: false
@@ -450,7 +450,7 @@ app.post('/webhook/uninstall', async (req, res) => {
 // ============================================
 
 // Get List of Banks from BayarCash
-app.get('/api/banks', async (req, res) => {
+app.get('/banks', async (req, res) => {
     try {
         const { locationId } = req.query;
 
@@ -488,7 +488,7 @@ app.get('/api/banks', async (req, res) => {
 });
 
 // Process Payment (Called by PaymentIframe from GHL)
-app.post('/api/process-payment', async (req, res) => {
+app.post('/process-payment', async (req, res) => {
     try {
         const { locationId, amount, currency, orderId, customer_name, customer_email, metadata, mode } = req.body;
 
@@ -589,7 +589,7 @@ app.post('/api/process-payment', async (req, res) => {
 });
 
 // Get settings for a specific location
-app.get('/api/settings/:location_id', async (req, res) => {
+app.get('/settings/:location_id', async (req, res) => {
     try {
         const { location_id } = req.params;
 
@@ -610,7 +610,7 @@ app.get('/api/settings/:location_id', async (req, res) => {
 });
 
 // Save BayarCash configuration
-app.post('/api/settings', async (req, res) => {
+app.post('/settings', async (req, res) => {
     try {
         const {
             location_id,
@@ -738,7 +738,7 @@ app.post('/api/settings', async (req, res) => {
 
 // GHL Payment Verification Endpoint
 // Called by GHL to verify payment status after custom_element_success_response
-app.post('/api/bayarcash-query', async (req, res) => {
+app.post('/bayarcash-query', async (req, res) => {
     try {
         const { type, transactionId, apiKey, chargeId, subscriptionId } = req.body;
 
