@@ -349,7 +349,11 @@ const PaymentIframe = () => {
                     console.log('🔄 Polling status for:', paymentData.transactionId);
                     // Add timestamp to prevent caching
                     const res = await axios.get(`/api/payment-status/${paymentData.transactionId}?t=${new Date().getTime()}`);
-                    console.log(`🔄 Polling result [${paymentData.transactionId}]:`, res.data.status);
+
+                    // Only log if status changed (not pending) to reduce spam
+                    if (res.data.status !== 'pending') {
+                        console.log(`🔄 Polling result [${paymentData.transactionId}]:`, res.data.status);
+                    }
 
                     if (res.data.status === 'success' || res.data.status === 'successful') {
                         console.log('✅ Payment success detected via polling!');
