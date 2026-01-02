@@ -585,44 +585,51 @@ app.post('/webhook/bayarcash-callback', async (req, res) => {
         // status=3: SUCCESS (Approved)
         // status=4: CANCELLED
 
+        // ============================================
+        // Step 0: Lookup transaction in database (MOVED UP)
+        // ============================================
+        // We need 'transaction' object for ALL statuses (to get original ID)
+        console.log('🔍 Looking up transaction by order_number:', order_number);
+
+        let txRows = [];
+        let transaction = null;
+
+        // First try by order_number (most reliable)
+        const [orderRows] = await pool.execute(
+            'SELECT location_id, bayarcash_order_id, metadata, transaction_id FROM payment_transactions WHERE bayarcash_order_id = ?',
+            [order_number]
+        );
+
+        if (orderRows.length > 0) {
+            console.log('✅ Found transaction by order_number');
+            txRows = orderRows;
+        } else {
+            // Fallback: try by transaction_id just in case
+            console.log('🔍 Order not found, trying by transaction_id:', transaction_id);
+            const [idRows] = await pool.execute(
+                'SELECT location_id, bayarcash_order_id, metadata, transaction_id FROM payment_transactions WHERE transaction_id = ?',
+                [transaction_id]
+            );
+            txRows = idRows;
+        }
+
+        if (txRows.length === 0) {
+            console.error('❌ Cannot find transaction in database');
+            console.error('   Tried order_number:', order_number);
+            console.error('   Tried transaction_id:', transaction_id);
+            return res.json({ received: true, warning: 'Transaction not found' });
+        }
+
+        transaction = txRows[0];
+        const locationId = transaction.location_id;
+
+        // End Step 0
+        // ============================================
+
         if (status === 3 || status === '3' || status_description === 'Approved') {
             console.log('✅ Payment SUCCESSFUL via webhook callback');
+            // transaction, locationId are now available here
 
-            // Step 1: Lookup transaction in database to get locationId and original GHL orderId
-            // NOTE: BayarCash callback sends transaction_id (trx_xxx) but we store payment intent ID (pi_xxx)
-            // So we lookup by order_number which is consistent
-            console.log('🔍 Looking up transaction by order_number:', order_number);
-
-            let txRows = [];
-
-            // First try by order_number (most reliable)
-            const [orderRows] = await pool.execute(
-                'SELECT location_id, bayarcash_order_id, metadata, transaction_id FROM payment_transactions WHERE bayarcash_order_id = ?',
-                [order_number]
-            );
-
-            if (orderRows.length > 0) {
-                console.log('✅ Found transaction by order_number');
-                txRows = orderRows;
-            } else {
-                // Fallback: try by transaction_id just in case
-                console.log('🔍 Order not found, trying by transaction_id:', transaction_id);
-                const [idRows] = await pool.execute(
-                    'SELECT location_id, bayarcash_order_id, metadata, transaction_id FROM payment_transactions WHERE transaction_id = ?',
-                    [transaction_id]
-                );
-                txRows = idRows;
-            }
-
-            if (txRows.length === 0) {
-                console.error('❌ Cannot find transaction in database');
-                console.error('   Tried order_number:', order_number);
-                console.error('   Tried transaction_id:', transaction_id);
-                return res.json({ received: true, warning: 'Transaction not found' });
-            }
-
-            const transaction = txRows[0];
-            const locationId = transaction.location_id;
             let ghlOrderId = null;
 
             // Try to extract original GHL orderId from metadata
