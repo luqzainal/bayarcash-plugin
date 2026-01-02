@@ -454,9 +454,7 @@ const PaymentIframe = () => {
                 )}
 
                 {status === 'error' && (
-                    { status === 'error' && (
-                        <ErrorWithAutoClose message={error} />
-                    )}
+                    <ErrorWithAutoClose message={error} />
                 )}
             </div>
         </div>
