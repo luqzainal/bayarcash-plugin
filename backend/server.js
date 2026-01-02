@@ -589,25 +589,36 @@ app.post('/webhook/bayarcash-callback', async (req, res) => {
             console.log('✅ Payment SUCCESSFUL via webhook callback');
 
             // Step 1: Lookup transaction in database to get locationId and original GHL orderId
-            const [txRows] = await pool.execute(
-                'SELECT location_id, bayarcash_order_id, metadata FROM payment_transactions WHERE transaction_id = ?',
-                [transaction_id]
+            // NOTE: BayarCash callback sends transaction_id (trx_xxx) but we store payment intent ID (pi_xxx)
+            // So we lookup by order_number which is consistent
+            console.log('🔍 Looking up transaction by order_number:', order_number);
+
+            let txRows = [];
+
+            // First try by order_number (most reliable)
+            const [orderRows] = await pool.execute(
+                'SELECT location_id, bayarcash_order_id, metadata, transaction_id FROM payment_transactions WHERE bayarcash_order_id = ?',
+                [order_number]
             );
 
-            if (txRows.length === 0) {
-                console.error('❌ Transaction not found in database:', transaction_id);
-                // Try to find by order_number as fallback
-                const [orderRows] = await pool.execute(
-                    'SELECT location_id, bayarcash_order_id, metadata FROM payment_transactions WHERE bayarcash_order_id = ?',
-                    [order_number]
+            if (orderRows.length > 0) {
+                console.log('✅ Found transaction by order_number');
+                txRows = orderRows;
+            } else {
+                // Fallback: try by transaction_id just in case
+                console.log('🔍 Order not found, trying by transaction_id:', transaction_id);
+                const [idRows] = await pool.execute(
+                    'SELECT location_id, bayarcash_order_id, metadata, transaction_id FROM payment_transactions WHERE transaction_id = ?',
+                    [transaction_id]
                 );
+                txRows = idRows;
+            }
 
-                if (orderRows.length === 0) {
-                    console.error('❌ Cannot find transaction by order_number either:', order_number);
-                    return res.json({ received: true, warning: 'Transaction not found' });
-                }
-
-                txRows.push(orderRows[0]);
+            if (txRows.length === 0) {
+                console.error('❌ Cannot find transaction in database');
+                console.error('   Tried order_number:', order_number);
+                console.error('   Tried transaction_id:', transaction_id);
+                return res.json({ received: true, warning: 'Transaction not found' });
             }
 
             const transaction = txRows[0];
@@ -784,10 +795,14 @@ app.get('/banks', async (req, res) => {
 // Process Payment (Called by PaymentIframe from GHL)
 app.post('/process-payment', async (req, res) => {
     try {
+        // Log FULL request to see what GHL actually sends
+        console.log('📥 Full request body from GHL:', JSON.stringify(req.body, null, 2));
+
         const { locationId, amount, currency, orderId, customer_name, customer_email, metadata, mode, publishableKey } = req.body;
 
         // SECURE LOG: Mask publishable key
         console.log('💳 Processing payment from GHL iframe:', { locationId, amount, currency, orderId, mode, keyEnding: maskSensitive(publishableKey) });
+        console.log('🔍 orderId value:', orderId, '| type:', typeof orderId);
 
         if (!locationId || !amount) {
             console.error('❌ Missing required fields. Received body keys:', Object.keys(req.body));
