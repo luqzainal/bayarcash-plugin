@@ -75,7 +75,7 @@ const SuccessWithAutoClose = () => {
 
 // Error component with auto-close countdown
 const ErrorWithAutoClose = ({ message }) => {
-    const [countdown, setCountdown] = useState(10); // Give user more time to read error (10s)
+    const [countdown, setCountdown] = useState(5); // Reduced to 5s as requested
     const [canClose, setCanClose] = useState(true);
 
     useEffect(() => {
@@ -347,7 +347,9 @@ const PaymentIframe = () => {
             pollInterval = setInterval(async () => {
                 try {
                     console.log('🔄 Polling status for:', paymentData.transactionId);
-                    const res = await axios.get(`/api/payment-status/${paymentData.transactionId}`);
+                    // Add timestamp to prevent caching
+                    const res = await axios.get(`/api/payment-status/${paymentData.transactionId}?t=${new Date().getTime()}`);
+                    console.log(`🔄 Polling result [${paymentData.transactionId}]:`, res.data.status);
 
                     if (res.data.status === 'success' || res.data.status === 'successful') {
                         console.log('✅ Payment success detected via polling!');
