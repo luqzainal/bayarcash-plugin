@@ -1341,7 +1341,7 @@ app.post('/bayarcash-query', async (req, res) => {
             console.log('📋 Full BayarCash Response:', JSON.stringify(paymentData, null, 2));
 
             // Step 3: Only return success if status is 'successful'
-            if (paymentData.status === 'successful' || paymentData.status === 'success' || paymentData.status === 3 || paymentData.status === '3') {
+            if (paymentData.status === 'successful' || paymentData.status === 'success' || paymentData.status === 'paid' || paymentData.status === 3 || paymentData.status === '3') {
                 console.log('✅ Payment verified as SUCCESSFUL');
                 return res.json({ success: true });
             } else {
