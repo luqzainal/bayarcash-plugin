@@ -1241,7 +1241,7 @@ app.post('/bayarcash-query', async (req, res) => {
         if (!locationId && apiKey) {
             console.log('🔎 No locationId provided, searching by apiKey...');
             const [keyRows] = await pool.execute(
-                'SELECT location_id FROM ghl_integrations WHERE bayarcash_api_key_live = ? OR bayarcash_api_key_test = ?',
+                'SELECT location_id, bayarcash_api_key_live, bayarcash_api_key_test FROM ghl_integrations WHERE bayarcash_api_key_live = ? OR bayarcash_api_key_test = ?',
                 [apiKey, apiKey]
             );
 
@@ -1262,7 +1262,7 @@ app.post('/bayarcash-query', async (req, res) => {
 
         // Step 1: Fetch BayarCash PAT from database
         const [rows] = await pool.execute(
-            'SELECT bayarcash_pat_live, bayarcash_pat_test, bayarcash_portal_key_live, bayarcash_portal_key_test FROM ghl_integrations WHERE location_id = ?',
+            'SELECT bayarcash_pat_live, bayarcash_pat_test, bayarcash_portal_key_live, bayarcash_portal_key_test, bayarcash_api_key_live, bayarcash_api_key_test FROM ghl_integrations WHERE location_id = ?',
             [locationId]
         );
 
@@ -1273,25 +1273,45 @@ app.post('/bayarcash-query', async (req, res) => {
             return res.json({ success: true });
         }
 
+
+
         const config = rows[0];
 
-        // Determine which PAT to use based on liveMode flag from GHL
+        // Determine which PAT to use based on liveMode flag from GHL OR by matching apiKey
         let pat, apiUrl;
-        if (liveMode === true || liveMode === 'true') {
-            pat = config.bayarcash_pat_live;
-            apiUrl = 'https://api.console.bayar.cash/v3';
-            console.log('🚀 Using LIVE mode for verification');
-        } else if (liveMode === false || liveMode === 'false') {
+
+        // 1. Try to detect mode by matching API Key (most reliable)
+        let detectedModeByKeys = null;
+        if (apiKey) {
+            if (apiKey === config.bayarcash_api_key_test) {
+                detectedModeByKeys = 'test';
+                console.log('🔑 API Key matches TEST key');
+            } else if (apiKey === config.bayarcash_api_key_live) {
+                detectedModeByKeys = 'live';
+                console.log('🔑 API Key matches LIVE key');
+            }
+        }
+
+        // 2. Logic to choose mode
+        if (detectedModeByKeys === 'test' || liveMode === false || liveMode === 'false') {
             pat = config.bayarcash_pat_test;
             apiUrl = 'https://api.console.bayarcash-sandbox.com/v3';
             console.log('🧪 Using TEST mode for verification');
+        } else if (detectedModeByKeys === 'live' || liveMode === true || liveMode === 'true') {
+            pat = config.bayarcash_pat_live;
+            apiUrl = 'https://api.console.bayar.cash/v3';
+            console.log('🚀 Using LIVE mode for verification');
         } else {
             // Fallback: prefer live, then test
-            pat = config.bayarcash_pat_live || config.bayarcash_pat_test;
-            apiUrl = config.bayarcash_pat_live
-                ? 'https://api.console.bayar.cash/v3'
-                : 'https://api.console.bayarcash-sandbox.com/v3';
-            console.log('🔄 Auto-detecting mode based on available PAT');
+            if (config.bayarcash_pat_live) {
+                pat = config.bayarcash_pat_live;
+                apiUrl = 'https://api.console.bayar.cash/v3';
+                console.log('🔄 Fallback: Defaulting to LIVE mode');
+            } else {
+                pat = config.bayarcash_pat_test;
+                apiUrl = 'https://api.console.bayarcash-sandbox.com/v3';
+                console.log('🔄 Fallback: Defaulting to TEST mode');
+            }
         }
 
         if (!pat) {
