@@ -626,8 +626,15 @@ app.post('/webhook/bayarcash-callback', async (req, res) => {
             let ghlOrderId = null;
 
             // Try to extract original GHL orderId from metadata
+            let metadata = {};
             try {
-                const metadata = JSON.parse(transaction.metadata || '{}');
+                // Fix: mysql2 driver might return JSON column as Object already.
+                if (typeof transaction.metadata === 'object' && transaction.metadata !== null) {
+                    metadata = transaction.metadata;
+                } else if (typeof transaction.metadata === 'string') {
+                    metadata = JSON.parse(transaction.metadata || '{}');
+                }
+
                 // Support both new format (ghlOrderId) and old format (orderId)
                 ghlOrderId = metadata.ghlOrderId || metadata.orderId;
                 console.log('📋 Parsed metadata:', JSON.stringify(metadata, null, 2));

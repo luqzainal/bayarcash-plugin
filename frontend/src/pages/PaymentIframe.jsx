@@ -98,6 +98,8 @@ const PaymentIframe = () => {
             // Atau jika object dengan properti locationId/amount (untuk payment link)
             if (data && (data.type === 'payment_initiate_props' || data.amount)) {
 
+                console.log('🔍 FULL DATA RECEIVED:', JSON.stringify(data, null, 2)); // Debugging log
+
                 // STOP THE LOOP IMMEDIATELY when we get valid data
                 if (intervalRef.current) {
                     clearInterval(intervalRef.current);
