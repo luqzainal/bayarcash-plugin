@@ -959,6 +959,35 @@ app.post('/process-payment', async (req, res) => {
     }
 });
 
+// Check Payment Status (Polling Endpoint)
+app.get('/payment-status/:transactionId', async (req, res) => {
+    try {
+        const { transactionId } = req.params;
+
+        if (!transactionId) {
+            return res.status(400).json({ error: 'Transaction ID is required' });
+        }
+
+        const [rows] = await pool.execute(
+            'SELECT status, bayarcash_order_id, metadata FROM payment_transactions WHERE transaction_id = ?',
+            [transactionId]
+        );
+
+        if (rows.length === 0) {
+            return res.status(404).json({ error: 'Transaction not found' });
+        }
+
+        res.json({
+            status: rows[0].status,
+            orderId: rows[0].bayarcash_order_id
+        });
+
+    } catch (error) {
+        console.error('❌ Error checking payment status:', error.message);
+        res.status(500).json({ error: 'Failed to check status' });
+    }
+});
+
 // ============================================
 // SECURITY FIX: Get settings - Only return PUBLIC keys (IDOR Prevention)
 // ============================================

@@ -150,8 +150,12 @@ const PaymentIframe = () => {
                     console.log('✅ Payment intent created:', response.data);
 
                     if (response.data.paymentUrl) {
-                        // Store URL in paymentData for user to click
-                        setPaymentData(prev => ({ ...prev, paymentUrl: response.data.paymentUrl }));
+                        // Store URL and Transaction ID
+                        setPaymentData(prev => ({
+                            ...prev,
+                            paymentUrl: response.data.paymentUrl,
+                            transactionId: response.data.transactionId
+                        }));
                         setStatus('ready_to_pay');
                         console.log('🔗 Payment URL ready:', response.data.paymentUrl);
                     } else {
@@ -271,6 +275,49 @@ const PaymentIframe = () => {
         }
     }, []); // Empty dependency mainly because we rely on window.location parsing logic only once on mount or we can add searchParams if we want strictness, but window.location is safer source of truth here
 
+    // Auto-popup and Polling Logic
+    useEffect(() => {
+        let pollInterval;
+
+        if (status === 'ready_to_pay' && paymentData?.paymentUrl && paymentData?.transactionId) {
+            console.log('🚀 Auto-opening payment URL in new tab...');
+            // Attempt to open
+            window.open(paymentData.paymentUrl, '_blank');
+
+            // Start Polling
+            pollInterval = setInterval(async () => {
+                try {
+                    console.log('🔄 Polling status for:', paymentData.transactionId);
+                    const res = await axios.get(`/api/payment-status/${paymentData.transactionId}`);
+
+                    if (res.data.status === 'success' || res.data.status === 'successful') {
+                        console.log('✅ Payment success detected via polling!');
+                        clearInterval(pollInterval);
+                        setStatus('success');
+
+                        // Notify GHL
+                        const successMsg = JSON.stringify({
+                            type: 'custom_element_success_response',
+                            chargeId: paymentData.transactionId
+                        });
+                        window.parent.postMessage(successMsg, '*');
+                    } else if (res.data.status === 'failed') {
+                        console.log('❌ Payment failed detected via polling');
+                        clearInterval(pollInterval);
+                        setStatus('error');
+                        setError('Payment failed');
+                    }
+                } catch (err) {
+                    console.error('Polling error:', err);
+                }
+            }, 3000); // Poll every 3 seconds
+        }
+
+        return () => {
+            if (pollInterval) clearInterval(pollInterval);
+        };
+    }, [status, paymentData]);
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
             <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full text-center">
@@ -310,29 +357,17 @@ const PaymentIframe = () => {
 
                 {status === 'ready_to_pay' && paymentData?.paymentUrl && (
                     <>
-                        <div className="rounded-full h-16 w-16 bg-green-100 mx-auto mb-4 flex items-center justify-center">
-                            <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
+                        <div className="rounded-full h-16 w-16 bg-blue-50 mx-auto mb-4 flex items-center justify-center">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                         </div>
-                        <h2 className="text-xl font-semibold text-slate-800">Payment Ready!</h2>
-                        <p className="text-slate-500 mt-2">Click below to proceed to BayarCash</p>
-                        {paymentData && (
-                            <div className="mt-4 text-left bg-slate-50 p-4 rounded-md">
-                                <p className="text-sm text-slate-600">Amount: <span className="font-semibold">{paymentData.currency} {paymentData.amount}</span></p>
-                            </div>
-                        )}
-                        {/* Open in new tab - banks block iframe. postMessage handled via return URL callback */}
-                        <a
-                            href={paymentData.paymentUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="mt-6 inline-block px-8 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors shadow-lg"
-                        >
-                            Pay Now with BayarCash
-                        </a>
-                        <p className="text-xs text-slate-400 mt-3">Opens payment page in new tab</p>
-                        <p className="text-xs text-slate-500 mt-1">After payment, return here to confirm</p>
+                        <h2 className="text-xl font-semibold text-slate-800">Payment Opened in New Tab</h2>
+                        <p className="text-slate-500 mt-2">Please complete the payment in the new tab.</p>
+
+                        <div className="mt-6 p-4 bg-yellow-50 text-yellow-800 text-sm rounded-lg">
+                            <p><strong>Note:</strong> If the payment page didn't open automatically, <a href={paymentData.paymentUrl} target="_blank" rel="noopener noreferrer" className="underline font-bold">click here</a>.</p>
+                        </div>
+
+                        <p className="text-xs text-slate-400 mt-4">We are checking your payment status automatically...</p>
                     </>
                 )}
 
