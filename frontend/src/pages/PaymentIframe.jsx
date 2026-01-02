@@ -303,11 +303,18 @@ const PaymentIframe = () => {
                             chargeId: paymentData.transactionId
                         });
                         window.parent.postMessage(successMsg, '*');
-                    } else if (res.data.status === 'failed') {
+                    } else if (res.data.status === 'failed' || res.data.status === 'cancelled') {
                         console.log('❌ Payment failed detected via polling');
                         clearInterval(pollInterval);
                         setStatus('error');
-                        setError('Payment failed');
+                        setError('Payment failed or cancelled');
+
+                        // Notify GHL of failure
+                        const errorMsg = JSON.stringify({
+                            type: 'custom_element_error_response',
+                            error: { description: 'Payment failed or was cancelled' }
+                        });
+                        window.parent.postMessage(errorMsg, '*');
                     }
                 } catch (err) {
                     console.error('Polling error:', err);

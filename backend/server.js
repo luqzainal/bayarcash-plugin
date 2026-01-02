@@ -735,17 +735,22 @@ app.post('/webhook/bayarcash-callback', async (req, res) => {
             console.log('   Reason:', status_description);
 
             // Update transaction status
+            // CRITICAL FIX: Use 'transaction.transaction_id' (from DB, likely pi_xxx)
+            const dbTransactionId = transaction.transaction_id;
+
             await pool.execute(
                 'UPDATE payment_transactions SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE transaction_id = ?',
-                ['failed', transaction_id]
+                ['failed', dbTransactionId]
             );
         } else if (status === 4 || status === '4') {
             console.log('⚠️ Payment CANCELLED via webhook callback');
 
             // Update transaction status
+            const dbTransactionId = transaction.transaction_id;
+
             await pool.execute(
                 'UPDATE payment_transactions SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE transaction_id = ?',
-                ['cancelled', transaction_id]
+                ['cancelled', dbTransactionId]
             );
         } else {
             console.log('❓ Unknown status:', status);
