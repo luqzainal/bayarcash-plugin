@@ -371,96 +371,100 @@ const PaymentIframe = () => {
                         // Notify GHL of failure
                         const errorMsg = JSON.stringify({
                             type: 'custom_element_error_response',
+                            chargeId: paymentData.transactionId, // Add chargeId to help GHL identify
                             error: { description: 'Payment failed or was cancelled' }
                         });
+                        console.log('📤 Sending Error to GHL:', errorMsg);
                         window.parent.postMessage(errorMsg, '*');
                     }
-                } catch (err) {
-                    console.error('Polling error:', err);
+                    window.parent.postMessage(errorMsg, '*');
                 }
-            }, 3000); // Poll every 3 seconds
-        }
+                } catch (err) {
+                console.error('Polling error:', err);
+            }
+        }, 3000); // Poll every 3 seconds
+}
 
-        return () => {
-            if (pollInterval) clearInterval(pollInterval);
-        };
+return () => {
+    if (pollInterval) clearInterval(pollInterval);
+};
     }, [status, paymentData]);
 
-    return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-            <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full text-center">
-                {status === 'loading' && (
-                    <>
-                        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                        <h2 className="text-xl font-semibold text-slate-800">Initializing Payment...</h2>
-                        <p className="text-slate-500 mt-2">Please wait</p>
-                    </>
-                )}
+return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full text-center">
+            {status === 'loading' && (
+                <>
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <h2 className="text-xl font-semibold text-slate-800">Initializing Payment...</h2>
+                    <p className="text-slate-500 mt-2">Please wait</p>
+                </>
+            )}
 
-                {status === 'waiting_for_payment_data' && (
-                    <>
-                        <div className="animate-pulse rounded-full h-16 w-16 bg-blue-100 mx-auto mb-4 flex items-center justify-center">
-                            <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
+            {status === 'waiting_for_payment_data' && (
+                <>
+                    <div className="animate-pulse rounded-full h-16 w-16 bg-blue-100 mx-auto mb-4 flex items-center justify-center">
+                        <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <h2 className="text-xl font-semibold text-slate-800">Waiting for Payment Details...</h2>
+                    <p className="text-slate-500 mt-2">Connecting to payment system</p>
+                </>
+            )}
+
+            {status === 'processing' && (
+                <>
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-green-600 mx-auto mb-4"></div>
+                    <h2 className="text-xl font-semibold text-slate-800">Processing Payment...</h2>
+                    <p className="text-slate-500 mt-2">Creating secure payment session</p>
+                    {paymentData && (
+                        <div className="mt-4 text-left bg-slate-50 p-4 rounded-md">
+                            <p className="text-sm text-slate-600">Amount: <span className="font-semibold">{paymentData.currency} {paymentData.amount}</span></p>
+                            <p className="text-sm text-slate-600">Order: <span className="font-semibold">{paymentData.orderId}</span></p>
                         </div>
-                        <h2 className="text-xl font-semibold text-slate-800">Waiting for Payment Details...</h2>
-                        <p className="text-slate-500 mt-2">Connecting to payment system</p>
-                    </>
-                )}
+                    )}
+                </>
+            )}
 
-                {status === 'processing' && (
-                    <>
-                        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-green-600 mx-auto mb-4"></div>
-                        <h2 className="text-xl font-semibold text-slate-800">Processing Payment...</h2>
-                        <p className="text-slate-500 mt-2">Creating secure payment session</p>
-                        {paymentData && (
-                            <div className="mt-4 text-left bg-slate-50 p-4 rounded-md">
-                                <p className="text-sm text-slate-600">Amount: <span className="font-semibold">{paymentData.currency} {paymentData.amount}</span></p>
-                                <p className="text-sm text-slate-600">Order: <span className="font-semibold">{paymentData.orderId}</span></p>
-                            </div>
-                        )}
-                    </>
-                )}
+            {status === 'ready_to_pay' && paymentData?.paymentUrl && (
+                <>
+                    <div className="rounded-full h-16 w-16 bg-blue-50 mx-auto mb-4 flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    </div>
+                    <h2 className="text-xl font-semibold text-slate-800">Payment Opened in New Tab</h2>
+                    <p className="text-slate-500 mt-2">Please complete the payment in the new tab.</p>
 
-                {status === 'ready_to_pay' && paymentData?.paymentUrl && (
-                    <>
-                        <div className="rounded-full h-16 w-16 bg-blue-50 mx-auto mb-4 flex items-center justify-center">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                        </div>
-                        <h2 className="text-xl font-semibold text-slate-800">Payment Opened in New Tab</h2>
-                        <p className="text-slate-500 mt-2">Please complete the payment in the new tab.</p>
+                    <div className="mt-6 p-4 bg-yellow-50 text-yellow-800 text-sm rounded-lg">
+                        <p><strong>Note:</strong> If the payment page didn't open automatically, <a href={paymentData.paymentUrl} target="_blank" rel="noopener noreferrer" className="underline font-bold">click here</a>.</p>
+                    </div>
 
-                        <div className="mt-6 p-4 bg-yellow-50 text-yellow-800 text-sm rounded-lg">
-                            <p><strong>Note:</strong> If the payment page didn't open automatically, <a href={paymentData.paymentUrl} target="_blank" rel="noopener noreferrer" className="underline font-bold">click here</a>.</p>
-                        </div>
+                    <p className="text-xs text-slate-400 mt-4">We are checking your payment status automatically...</p>
+                </>
+            )}
 
-                        <p className="text-xs text-slate-400 mt-4">We are checking your payment status automatically...</p>
-                    </>
-                )}
+            {status === 'redirecting' && (
+                <>
+                    <div className="animate-bounce rounded-full h-16 w-16 bg-green-100 mx-auto mb-4 flex items-center justify-center">
+                        <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                        </svg>
+                    </div>
+                    <h2 className="text-xl font-semibold text-slate-800">Redirecting to Checkout...</h2>
+                    <p className="text-slate-500 mt-2">Please wait while we redirect you to BayarCash</p>
+                </>
+            )}
 
-                {status === 'redirecting' && (
-                    <>
-                        <div className="animate-bounce rounded-full h-16 w-16 bg-green-100 mx-auto mb-4 flex items-center justify-center">
-                            <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                            </svg>
-                        </div>
-                        <h2 className="text-xl font-semibold text-slate-800">Redirecting to Checkout...</h2>
-                        <p className="text-slate-500 mt-2">Please wait while we redirect you to BayarCash</p>
-                    </>
-                )}
+            {status === 'success' && (
+                <SuccessWithAutoClose />
+            )}
 
-                {status === 'success' && (
-                    <SuccessWithAutoClose />
-                )}
-
-                {status === 'error' && (
-                    <ErrorWithAutoClose message={error} />
-                )}
-            </div>
+            {status === 'error' && (
+                <ErrorWithAutoClose message={error} />
+            )}
         </div>
-    );
+    </div>
+);
 };
 
 export default PaymentIframe;
