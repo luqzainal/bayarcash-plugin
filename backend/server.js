@@ -30,9 +30,21 @@ const limiter = rateLimit({
     message: {
         error: 'Too many requests, please try again later.',
         retryAfter: '15 minutes'
-    }
+    },
+    // Exclude payment status polling from rate limiting
+    skip: (req) => req.url.startsWith('/payment-status/') || req.url.startsWith('/api/payment-status/')
 });
 app.use(limiter);
+
+// Dedicated Rate Limiter for Polling (More generous)
+// Allow 600 requests per 15 mins (approx 30 mins of polling at 3s interval)
+const pollingLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 600,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Polling limit exceeded' }
+});
 
 // Middleware to bypass ngrok browser warning  
 app.use((req, res, next) => {
@@ -985,7 +997,7 @@ app.post('/process-payment', async (req, res) => {
 });
 
 // Check Payment Status (Polling Endpoint)
-app.get('/payment-status/:transactionId', async (req, res) => {
+app.get('/payment-status/:transactionId', pollingLimiter, async (req, res) => {
     try {
         const { transactionId } = req.params;
 
