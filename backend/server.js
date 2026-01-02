@@ -647,9 +647,13 @@ app.post('/webhook/bayarcash-callback', async (req, res) => {
             console.log('📦 GHL Order ID:', ghlOrderId);
 
             // Step 2: Update transaction status in our database
+            // CRITICAL FIX: Use 'transaction.transaction_id' (from DB, likely pi_xxx) NOT 'transaction_id' (from webhook, trx_xxx)
+            // The DB row is keyed by the ID we got when creating the intent.
+            const dbTransactionId = transaction.transaction_id;
+
             await pool.execute(
                 'UPDATE payment_transactions SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE transaction_id = ?',
-                ['success', transaction_id]
+                ['success', dbTransactionId]
             );
             console.log('💾 Transaction status updated to success');
 
